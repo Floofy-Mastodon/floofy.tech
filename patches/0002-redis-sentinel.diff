@@ -120,10 +120,10 @@ index 0000000000000..9f904f9bf8bae
 +  internal_network:
 +    internal: true
 diff --git a/app/lib/redis_configuration.rb b/app/lib/redis_configuration.rb
-index f0e86d985b8a9..7579ff2211d01 100644
+index fb1249640fd73..eff20cbb00469 100644
 --- a/app/lib/redis_configuration.rb
 +++ b/app/lib/redis_configuration.rb
-@@ -39,12 +39,47 @@ def namespace
+@@ -39,7 +39,38 @@ def namespace
    end
  
    def url
@@ -162,19 +162,21 @@ index f0e86d985b8a9..7579ff2211d01 100644
 +    ENV.include? 'REDIS_SENTINEL'
    end
  
+   def redis_driver
+@@ -49,6 +80,10 @@ def redis_driver
    private
  
    def raw_connection
--    Redis.new(url: url, driver: :hiredis)
+-    Redis.new(url: url, driver: redis_driver)
 +    if sentinel_mode?
-+      Redis.new(url: url, driver: :hiredis, sentinels: sentinels, master_name: master_name)
++      Redis.new(url: url, driver: redis_driver, sentinels: sentinels, master_name: master_name)
 +    else
-+      Redis.new(url: url, driver: :hiredis)
++      Redis.new(url: url, driver: redis_driver)
 +    end
    end
  end
 diff --git a/lib/mastodon/redis_config.rb b/lib/mastodon/redis_config.rb
-index 10672a53587b4..6b81466e82f0d 100644
+index c858b61a05368..b3211c7375a63 100644
 --- a/lib/mastodon/redis_config.rb
 +++ b/lib/mastodon/redis_config.rb
 @@ -20,6 +20,24 @@ def setup_redis_env_url(prefix = nil, defaults = true)
@@ -202,7 +204,7 @@ index 10672a53587b4..6b81466e82f0d 100644
  end
  
  setup_redis_env_url
-@@ -40,12 +58,28 @@ def setup_redis_env_url(prefix = nil, defaults = true)
+@@ -42,12 +60,28 @@ def setup_redis_env_url(prefix = nil, defaults = true)
      size: Sidekiq.server? ? Sidekiq[:concurrency] : Integer(ENV['MAX_THREADS'] || 5),
      timeout: 5,
    },
@@ -217,7 +219,7 @@ index 10672a53587b4..6b81466e82f0d 100644
  }.freeze
  
  REDIS_SIDEKIQ_PARAMS = {
-   driver: :hiredis,
+   driver: redis_driver,
    url: ENV['SIDEKIQ_REDIS_URL'],
    namespace: sidekiq_namespace,
 +
