@@ -234,10 +234,10 @@ index c858b61a05368..b3211c7375a63 100644
  
  ENV['REDIS_NAMESPACE'] = "mastodon_test#{ENV['TEST_ENV_NUMBER']}" if Rails.env.test?
 diff --git a/streaming/index.js b/streaming/index.js
-index 154ecbc02c5f5..cf477134dca3c 100644
+index 8f66362178a2c..cfc6b4b24aa3e 100644
 --- a/streaming/index.js
 +++ b/streaming/index.js
-@@ -245,13 +245,26 @@ const redisConfigFromEnv = (env) => {
+@@ -245,7 +245,7 @@ const redisConfigFromEnv = (env) => {
    let redisDatabase = parseIntFromEnv(env.REDIS_DB, 0, 'REDIS_DB');
  
    /** @type {import('ioredis').RedisOptions} */
@@ -245,7 +245,8 @@ index 154ecbc02c5f5..cf477134dca3c 100644
 +  let redisParams = {
      host: env.REDIS_HOST || '127.0.0.1',
      port: redisPort,
-     db: redisDatabase,
+     // Force support for both IPv6 and IPv4, by default ioredis sets this to 4,
+@@ -256,6 +256,19 @@ const redisConfigFromEnv = (env) => {
      password: env.REDIS_PASSWORD || undefined,
    };
  
