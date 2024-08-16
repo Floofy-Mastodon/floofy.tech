@@ -4,7 +4,7 @@ patches_dir = "patches"
 mode = "patch"
 # Own patch rebased onto glitch-soc's main branch, since
 # the version GitHub produces doesn't apply cleanly.
-url = "https://paste.gmem.ca/paste/287fcf48-b96a-4235-94c0-47b44ab82446/raw"
+url = "https://paste.gmem.ca/paste/0e0e6534-2bef-442f-8d73-5aff2a3514b4/raw"
 name = "0001-emoji-reactions.patch"
 
 [patches.redis-sentinel]
