@@ -1,7 +1,7 @@
-From 071dd6f2ebc369995532310a30acd6f72081ee28 Mon Sep 17 00:00:00 2001
+From c5a0388aea784370172251aaba1f5eb472d41390 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 7 Nov 2023 18:43:47 -0600
-Subject: [PATCH 01/29] Add support for emoji reactions Squashed, modified, and
+Subject: [PATCH 01/28] Add support for emoji reactions Squashed, modified, and
  rebased from glitch-soc/mastodon#2221.
 
 Co-authored-by: fef <owo@fef.moe>
@@ -30,8 +30,6 @@ Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
  .../flavours/glitch/reducers/settings.js      |   3 +
  .../flavours/glitch/reducers/statuses.js      |  50 +++++
  .../flavours/glitch/styles/components.scss    |  15 +-
- app/javascript/mastodon/locales/en.json       |   5 +
- app/javascript/mastodon/reducers/settings.js  |   2 +
  .../400-24px/add_reaction-fill.svg            |   1 +
  .../material-icons/400-24px/add_reaction.svg  |   1 +
  app/lib/activitypub/activity.rb               |  30 +++
@@ -64,12 +62,11 @@ Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
  config/routes/api.rb                          |   5 +
  config/settings.yml                           |   1 +
  .../20221124114030_create_status_reactions.rb |  16 ++
- ...15350_fix_foreign_keys_status_reactions.rb |  18 ++
  ...0215074425_move_emoji_reaction_settings.rb |  49 +++++
  db/schema.rb                                  |  15 ++
  .../fabricators/status_reaction_fabricator.rb |   8 +
  spec/models/status_reaction_spec.rb           |   3 +
- 59 files changed, 1056 insertions(+), 12 deletions(-)
+ 56 files changed, 1031 insertions(+), 12 deletions(-)
  create mode 100644 app/controllers/api/v1/statuses/reactions_controller.rb
  create mode 100644 app/javascript/flavours/glitch/components/status_reactions.jsx
  create mode 100644 app/javascript/material-icons/400-24px/add_reaction-fill.svg
@@ -83,13 +80,12 @@ Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
  create mode 100644 app/validators/status_reaction_validator.rb
  create mode 100644 app/workers/unreact_worker.rb
  create mode 100644 db/migrate/20221124114030_create_status_reactions.rb
- create mode 100644 db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb
  create mode 100644 db/migrate/20230215074425_move_emoji_reaction_settings.rb
  create mode 100644 spec/fabricators/status_reaction_fabricator.rb
  create mode 100644 spec/models/status_reaction_spec.rb
 
 diff --git a/.env.production.sample b/.env.production.sample
-index 1b3c511042..fa75a70c57 100644
+index 1b3c5110427a7..fa75a70c57e9a 100644
 --- a/.env.production.sample
 +++ b/.env.production.sample
 @@ -274,6 +274,9 @@ MAX_POLL_OPTIONS=5
@@ -104,7 +100,7 @@ index 1b3c511042..fa75a70c57 100644
  # 1048576 bytes equals 1 megabyte
 diff --git a/app/controllers/api/v1/statuses/reactions_controller.rb b/app/controllers/api/v1/statuses/reactions_controller.rb
 new file mode 100644
-index 0000000000..2d7e4f5984
+index 0000000000000..2d7e4f5984622
 --- /dev/null
 +++ b/app/controllers/api/v1/statuses/reactions_controller.rb
 @@ -0,0 +1,31 @@
@@ -140,7 +136,7 @@ index 0000000000..2d7e4f5984
 +  end
 +end
 diff --git a/app/javascript/flavours/glitch/actions/interactions.js b/app/javascript/flavours/glitch/actions/interactions.js
-index 43673642f5..db9b5a2dbd 100644
+index 43673642f5cb8..db9b5a2dbd3cd 100644
 --- a/app/javascript/flavours/glitch/actions/interactions.js
 +++ b/app/javascript/flavours/glitch/actions/interactions.js
 @@ -47,6 +47,16 @@ export const UNBOOKMARK_REQUEST = 'UNBOOKMARKED_REQUEST';
@@ -237,7 +233,7 @@ index 43673642f5..db9b5a2dbd 100644
 +  name,
 +});
 diff --git a/app/javascript/flavours/glitch/actions/notifications.js b/app/javascript/flavours/glitch/actions/notifications.js
-index 86e2d6eb4e..6dcda9f65c 100644
+index 86e2d6eb4eb20..6dcda9f65c48b 100644
 --- a/app/javascript/flavours/glitch/actions/notifications.js
 +++ b/app/javascript/flavours/glitch/actions/notifications.js
 @@ -184,6 +184,7 @@ const excludeTypesFromFilter = filter => {
@@ -249,7 +245,7 @@ index 86e2d6eb4e..6dcda9f65c 100644
      'mention',
      'poll',
 diff --git a/app/javascript/flavours/glitch/components/status.jsx b/app/javascript/flavours/glitch/components/status.jsx
-index a037895b4e..a6167699ea 100644
+index a037895b4e192..a6167699ea58e 100644
 --- a/app/javascript/flavours/glitch/components/status.jsx
 +++ b/app/javascript/flavours/glitch/components/status.jsx
 @@ -21,7 +21,7 @@ import Card from '../features/status/components/card';
@@ -303,7 +299,7 @@ index a037895b4e..a6167699ea 100644
                <StatusActionBar
                  status={status}
 diff --git a/app/javascript/flavours/glitch/components/status_action_bar.jsx b/app/javascript/flavours/glitch/components/status_action_bar.jsx
-index 7b00f84f1b..5e31a38edc 100644
+index 7b00f84f1b96b..5e31a38edc569 100644
 --- a/app/javascript/flavours/glitch/components/status_action_bar.jsx
 +++ b/app/javascript/flavours/glitch/components/status_action_bar.jsx
 @@ -8,6 +8,7 @@ import { withRouter } from 'react-router-dom';
@@ -392,7 +388,7 @@ index 7b00f84f1b..5e31a38edc 100644
  
          {filterButton}
 diff --git a/app/javascript/flavours/glitch/components/status_prepend.jsx b/app/javascript/flavours/glitch/components/status_prepend.jsx
-index 0777ffcda6..6373edb19d 100644
+index 0777ffcda6ec1..6373edb19dffb 100644
 --- a/app/javascript/flavours/glitch/components/status_prepend.jsx
 +++ b/app/javascript/flavours/glitch/components/status_prepend.jsx
 @@ -6,6 +6,7 @@ import { FormattedMessage } from 'react-intl';
@@ -431,7 +427,7 @@ index 0777ffcda6..6373edb19d 100644
        iconComponent = PushPinIcon;
 diff --git a/app/javascript/flavours/glitch/components/status_reactions.jsx b/app/javascript/flavours/glitch/components/status_reactions.jsx
 new file mode 100644
-index 0000000000..e3ae79958b
+index 0000000000000..e3ae79958b408
 --- /dev/null
 +++ b/app/javascript/flavours/glitch/components/status_reactions.jsx
 @@ -0,0 +1,175 @@
@@ -611,7 +607,7 @@ index 0000000000..e3ae79958b
 +
 +}
 diff --git a/app/javascript/flavours/glitch/containers/status_container.js b/app/javascript/flavours/glitch/containers/status_container.js
-index 116a3455f7..cf01d67060 100644
+index 116a3455f786e..cf01d67060cef 100644
 --- a/app/javascript/flavours/glitch/containers/status_container.js
 +++ b/app/javascript/flavours/glitch/containers/status_container.js
 @@ -16,6 +16,8 @@ import {
@@ -639,7 +635,7 @@ index 116a3455f7..cf01d67060 100644
      dispatch(openModal({
        modalType: 'EMBED',
 diff --git a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-index c556f15366..a26d3e3888 100644
+index c556f1536689f..a26d3e3888dec 100644
 --- a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 +++ b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 @@ -327,6 +327,7 @@ class EmojiPickerDropdown extends PureComponent {
@@ -660,7 +656,7 @@ index c556f15366..a26d3e3888 100644
          this.onHideDropdown();
        } else {
 diff --git a/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx b/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx
-index 7fabe78a94..9459b50ebc 100644
+index 7fabe78a94998..9459b50ebc1d9 100644
 --- a/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx
 @@ -3,6 +3,7 @@ import { PureComponent } from 'react';
@@ -694,7 +690,7 @@ index 7fabe78a94..9459b50ebc 100644
            className={selectedFilter === 'reblog' ? 'active' : ''}
            onClick={this.onClick('reblog')}
 diff --git a/app/javascript/flavours/glitch/features/notifications/components/notification.jsx b/app/javascript/flavours/glitch/features/notifications/components/notification.jsx
-index 1a049847d5..ac280282b6 100644
+index 1a049847d5b79..ac280282b6dec 100644
 --- a/app/javascript/flavours/glitch/features/notifications/components/notification.jsx
 +++ b/app/javascript/flavours/glitch/features/notifications/components/notification.jsx
 @@ -207,6 +207,31 @@ class Notification extends ImmutablePureComponent {
@@ -739,7 +735,7 @@ index 1a049847d5..ac280282b6 100644
        return this.renderReblog(notification);
      case 'status':
 diff --git a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-index 3377019bdc..b2d10b8cdd 100644
+index 3377019bdc8a9..b2d10b8cdd4e4 100644
 --- a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 @@ -7,6 +7,7 @@ import classNames from 'classnames';
@@ -830,7 +826,7 @@ index 3377019bdc..b2d10b8cdd 100644
  
          <div className='detailed-status__action-bar-dropdown'>
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
-index 2db9fa6d3a..7e23cd553f 100644
+index 2db9fa6d3a367..7e23cd553f2bb 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 @@ -21,6 +21,7 @@ import { Avatar } from '../../../components/avatar';
@@ -878,7 +874,7 @@ index 2db9fa6d3a..7e23cd553f 100644
              <div className='detailed-status__meta__line'>
                <a className='detailed-status__datetime' href={status.get('url')} target='_blank' rel='noopener noreferrer'>
 diff --git a/app/javascript/flavours/glitch/features/status/index.jsx b/app/javascript/flavours/glitch/features/status/index.jsx
-index 382f0ae037..dee554dc6f 100644
+index 382f0ae03740c..dee554dc6f231 100644
 --- a/app/javascript/flavours/glitch/features/status/index.jsx
 +++ b/app/javascript/flavours/glitch/features/status/index.jsx
 @@ -39,6 +39,8 @@ import {
@@ -928,7 +924,7 @@ index 382f0ae037..dee554dc6f 100644
                    onBookmark={this.handleBookmarkClick}
                    onDelete={this.handleDeleteClick}
 diff --git a/app/javascript/flavours/glitch/initial_state.js b/app/javascript/flavours/glitch/initial_state.js
-index c5628f51ce..7ec0e1411b 100644
+index c5628f51ce475..7ec0e1411b18c 100644
 --- a/app/javascript/flavours/glitch/initial_state.js
 +++ b/app/javascript/flavours/glitch/initial_state.js
 @@ -25,6 +25,7 @@
@@ -972,7 +968,7 @@ index c5628f51ce..7ec0e1411b 100644
  export const criticalUpdatesPending = initialState?.critical_updates_pending;
  export const statusPageUrl = getMeta('status_page_url');
 diff --git a/app/javascript/flavours/glitch/locales/en.json b/app/javascript/flavours/glitch/locales/en.json
-index 02e44932f8..9b7bccbd65 100644
+index 02e44932f8adb..9b7bccbd655fa 100644
 --- a/app/javascript/flavours/glitch/locales/en.json
 +++ b/app/javascript/flavours/glitch/locales/en.json
 @@ -55,12 +55,15 @@
@@ -1002,7 +998,7 @@ index 02e44932f8..9b7bccbd65 100644
 +  "tooltips.reactions": "Reactions"
  }
 diff --git a/app/javascript/flavours/glitch/reducers/settings.js b/app/javascript/flavours/glitch/reducers/settings.js
-index ff4af68752..1c9b4a28b8 100644
+index ff4af68752b82..1c9b4a28b84ae 100644
 --- a/app/javascript/flavours/glitch/reducers/settings.js
 +++ b/app/javascript/flavours/glitch/reducers/settings.js
 @@ -35,6 +35,7 @@ const initialState = ImmutableMap({
@@ -1030,7 +1026,7 @@ index ff4af68752..1c9b4a28b8 100644
        mention: true,
        poll: true,
 diff --git a/app/javascript/flavours/glitch/reducers/statuses.js b/app/javascript/flavours/glitch/reducers/statuses.js
-index 39df0e956d..ca7e98aa48 100644
+index 39df0e956d2b6..ca7e98aa487dd 100644
 --- a/app/javascript/flavours/glitch/reducers/statuses.js
 +++ b/app/javascript/flavours/glitch/reducers/statuses.js
 @@ -13,6 +13,11 @@ import {
@@ -1105,7 +1101,7 @@ index 39df0e956d..ca7e98aa48 100644
      return state.setIn([action.id, 'muted'], true);
    case STATUS_UNMUTE_SUCCESS:
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index ed5e1b319d..48fd1767ed 100644
+index ce0db097efbac..67cf80d7c7c41 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
 @@ -1507,7 +1507,8 @@ body > [data-popper-placement] {
@@ -1151,66 +1147,9 @@ index ed5e1b319d..48fd1767ed 100644
  .column-settings {
    display: flex;
    flex-direction: column;
-diff --git a/app/javascript/mastodon/locales/en.json b/app/javascript/mastodon/locales/en.json
-index aeeaf8209c..3c06d9776c 100644
---- a/app/javascript/mastodon/locales/en.json
-+++ b/app/javascript/mastodon/locales/en.json
-@@ -509,6 +509,8 @@
-   "notification.moderation_warning.action_suspend": "Your account has been suspended.",
-   "notification.own_poll": "Your poll has ended",
-   "notification.poll": "A poll you voted in has ended",
-+  "notification.private_mention": "{name} privately mentioned you",
-+  "notification.reaction": "{name} reacted to your post",
-   "notification.reblog": "{name} boosted your post",
-   "notification.relationships_severance_event": "Lost connections with {name}",
-   "notification.relationships_severance_event.account_suspension": "An admin from {from} has suspended {target}, which means you can no longer receive updates from them or interact with them.",
-@@ -554,6 +556,7 @@
-   "notifications.column_settings.mention": "Mentions:",
-   "notifications.column_settings.poll": "Poll results:",
-   "notifications.column_settings.push": "Push notifications",
-+  "notifications.column_settings.reaction": "Reactions:",
-   "notifications.column_settings.reblog": "Boosts:",
-   "notifications.column_settings.show": "Show in column",
-   "notifications.column_settings.sound": "Play sound",
-@@ -793,6 +796,7 @@
-   "status.pin": "Pin on profile",
-   "status.pinned": "Pinned post",
-   "status.read_more": "Read more",
-+  "status.react": "React",
-   "status.reblog": "Boost",
-   "status.reblog_private": "Boost with original visibility",
-   "status.reblogged_by": "{name} boosted",
-@@ -833,6 +837,7 @@
-   "timeline_hint.resources.follows": "Follows",
-   "timeline_hint.resources.replies": "Some replies",
-   "timeline_hint.resources.statuses": "Older posts",
-+  "tooltips.reactions": "Reactions",
-   "trends.counter_by_accounts": "{count, plural, one {{counter} person} other {{counter} people}} in the past {days, plural, one {day} other {{days} days}}",
-   "trends.trending_now": "Trending now",
-   "ui.beforeunload": "Your draft will be lost if you leave Mastodon.",
-diff --git a/app/javascript/mastodon/reducers/settings.js b/app/javascript/mastodon/reducers/settings.js
-index 6f55241dc1..7f0071f157 100644
---- a/app/javascript/mastodon/reducers/settings.js
-+++ b/app/javascript/mastodon/reducers/settings.js
-@@ -57,6 +57,7 @@ const initialState = ImmutableMap({
-       follow: true,
-       follow_request: false,
-       favourite: true,
-+      reaction: true,
-       reblog: true,
-       mention: true,
-       poll: true,
-@@ -70,6 +71,7 @@ const initialState = ImmutableMap({
-       follow: true,
-       follow_request: false,
-       favourite: true,
-+      reaction: true,
-       reblog: true,
-       mention: true,
-       poll: true,
 diff --git a/app/javascript/material-icons/400-24px/add_reaction-fill.svg b/app/javascript/material-icons/400-24px/add_reaction-fill.svg
 new file mode 100644
-index 0000000000..3ea1c30a52
+index 0000000000000..3ea1c30a52558
 --- /dev/null
 +++ b/app/javascript/material-icons/400-24px/add_reaction-fill.svg
 @@ -0,0 +1 @@
@@ -1218,17 +1157,17 @@ index 0000000000..3ea1c30a52
 \ No newline at end of file
 diff --git a/app/javascript/material-icons/400-24px/add_reaction.svg b/app/javascript/material-icons/400-24px/add_reaction.svg
 new file mode 100644
-index 0000000000..77aace24b0
+index 0000000000000..77aace24b0c68
 --- /dev/null
 +++ b/app/javascript/material-icons/400-24px/add_reaction.svg
 @@ -0,0 +1 @@
 +<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M480-480Zm0 400q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q43 0 83 8.5t77 24.5v90q-35-20-75.5-31.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160q133 0 226.5-93.5T800-480q0-32-6.5-62T776-600h86q9 29 13.5 58.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm320-600v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80ZM620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm140 260q68 0 123.5-38.5T684-400H276q25 63 80.5 101.5T480-260Z"/></svg>
 \ No newline at end of file
 diff --git a/app/lib/activitypub/activity.rb b/app/lib/activitypub/activity.rb
-index 322f3e27ad..19245a2c3b 100644
+index 322f3e27adb60..19245a2c3bd53 100644
 --- a/app/lib/activitypub/activity.rb
 +++ b/app/lib/activitypub/activity.rb
-@@ -39,6 +39,8 @@ class ActivityPub::Activity
+@@ -39,6 +39,8 @@ def klass
          ActivityPub::Activity::Follow
        when 'Like'
          ActivityPub::Activity::Like
@@ -1237,7 +1176,7 @@ index 322f3e27ad..19245a2c3b 100644
        when 'Block'
          ActivityPub::Activity::Block
        when 'Update'
-@@ -176,4 +178,32 @@ class ActivityPub::Activity
+@@ -176,4 +178,32 @@ def reject_payload!
      Rails.logger.info("Rejected #{@json['type']} activity #{@json['id']} from #{@account.uri}#{@options[:relayed_through_actor] && "via #{@options[:relayed_through_actor].uri}"}")
      nil
    end
@@ -1272,7 +1211,7 @@ index 322f3e27ad..19245a2c3b 100644
  end
 diff --git a/app/lib/activitypub/activity/emoji_react.rb b/app/lib/activitypub/activity/emoji_react.rb
 new file mode 100644
-index 0000000000..c9d88bc51c
+index 0000000000000..c9d88bc51c260
 --- /dev/null
 +++ b/app/lib/activitypub/activity/emoji_react.rb
 @@ -0,0 +1,26 @@
@@ -1303,7 +1242,7 @@ index 0000000000..c9d88bc51c
 +  end
 +end
 diff --git a/app/lib/activitypub/activity/like.rb b/app/lib/activitypub/activity/like.rb
-index aa1dc30403..86d70e0d70 100644
+index aa1dc304035a2..86d70e0d70822 100644
 --- a/app/lib/activitypub/activity/like.rb
 +++ b/app/lib/activitypub/activity/like.rb
 @@ -3,12 +3,38 @@
@@ -1347,10 +1286,10 @@ index aa1dc30403..86d70e0d70 100644
 +  end
  end
 diff --git a/app/lib/activitypub/activity/undo.rb b/app/lib/activitypub/activity/undo.rb
-index 9eff1b71c9..5efcfdc99f 100644
+index 9eff1b71c9db3..5efcfdc99f2d4 100644
 --- a/app/lib/activitypub/activity/undo.rb
 +++ b/app/lib/activitypub/activity/undo.rb
-@@ -11,6 +11,8 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+@@ -11,6 +11,8 @@ def perform
        undo_follow
      when 'Like'
        undo_like
@@ -1359,7 +1298,7 @@ index 9eff1b71c9..5efcfdc99f 100644
      when 'Block'
        undo_block
      when nil
-@@ -108,6 +110,31 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+@@ -108,6 +110,31 @@ def undo_like
      if @account.favourited?(status)
        favourite = status.favourites.where(account: @account).first
        favourite&.destroy
@@ -1392,7 +1331,7 @@ index 9eff1b71c9..5efcfdc99f 100644
        delete_later!(object_uri)
      end
 diff --git a/app/models/concerns/account/associations.rb b/app/models/concerns/account/associations.rb
-index 1c67b07e51..2bfd9fa54a 100644
+index 1c67b07e51161..2bfd9fa54a1a1 100644
 --- a/app/models/concerns/account/associations.rb
 +++ b/app/models/concerns/account/associations.rb
 @@ -13,6 +13,7 @@ module Account::Associations
@@ -1404,10 +1343,10 @@ index 1c67b07e51..2bfd9fa54a 100644
      has_many :mentions, inverse_of: :account, dependent: :destroy
      has_many :conversations, class_name: 'AccountConversation', dependent: :destroy, inverse_of: :account
 diff --git a/app/models/concerns/account/interactions.rb b/app/models/concerns/account/interactions.rb
-index 536afba17f..02095e578e 100644
+index 536afba17faf3..02095e578e84b 100644
 --- a/app/models/concerns/account/interactions.rb
 +++ b/app/models/concerns/account/interactions.rb
-@@ -235,6 +235,10 @@ module Account::Interactions
+@@ -235,6 +235,10 @@ def favourited?(status)
      status.proper.favourites.exists?(account: self)
    end
  
@@ -1419,10 +1358,10 @@ index 536afba17f..02095e578e 100644
      status.proper.bookmarks.exists?(account: self)
    end
 diff --git a/app/models/concerns/user/has_settings.rb b/app/models/concerns/user/has_settings.rb
-index b79726e38a..f3125f23f5 100644
+index b79726e38aedf..f3125f23f5db3 100644
 --- a/app/models/concerns/user/has_settings.rb
 +++ b/app/models/concerns/user/has_settings.rb
-@@ -123,6 +123,10 @@ module User::HasSettings
+@@ -123,6 +123,10 @@ def setting_hide_followers_count
      settings['hide_followers_count']
    end
  
@@ -1433,7 +1372,7 @@ index b79726e38a..f3125f23f5 100644
    def allows_report_emails?
      settings['notification_emails.report']
    end
-@@ -166,4 +170,14 @@ module User::HasSettings
+@@ -166,4 +170,14 @@ def show_all_media?
    def hide_all_media?
      settings['web.display_media'] == 'hide_all'
    end
@@ -1449,7 +1388,7 @@ index b79726e38a..f3125f23f5 100644
 +  end
  end
 diff --git a/app/models/notification.rb b/app/models/notification.rb
-index f1605f0347..0a0e64f17d 100644
+index f1605f0347ad1..0a0e64f17da5b 100644
 --- a/app/models/notification.rb
 +++ b/app/models/notification.rb
 @@ -27,6 +27,7 @@ class Notification < ApplicationRecord
@@ -1486,7 +1425,7 @@ index f1605f0347..0a0e64f17d 100644
      belongs_to :poll, inverse_of: false
      belongs_to :report, inverse_of: false
      belongs_to :account_relationship_severance_event, inverse_of: false
-@@ -114,6 +120,8 @@ class Notification < ApplicationRecord
+@@ -114,6 +120,8 @@ def target_status
        status&.reblog
      when :favourite
        favourite&.status
@@ -1495,7 +1434,7 @@ index f1605f0347..0a0e64f17d 100644
      when :mention
        mention&.status
      when :poll
-@@ -240,6 +248,8 @@ class Notification < ApplicationRecord
+@@ -240,6 +248,8 @@ def preload_cache_collection_target_statuses(notifications, &_block)
      end
    end
  
@@ -1504,7 +1443,7 @@ index f1605f0347..0a0e64f17d 100644
    after_initialize :set_from_account
    before_validation :set_from_account
  
-@@ -251,7 +261,7 @@ class Notification < ApplicationRecord
+@@ -251,7 +261,7 @@ def set_from_account
      return unless new_record?
  
      case activity_type
@@ -1514,7 +1453,7 @@ index f1605f0347..0a0e64f17d 100644
      when 'Mention'
        self.from_account_id = activity&.status&.account_id
 diff --git a/app/models/status.rb b/app/models/status.rb
-index 4f2ceb9ca9..1e3e7b696a 100644
+index 4f2ceb9ca9527..1e3e7b696a4d9 100644
 --- a/app/models/status.rb
 +++ b/app/models/status.rb
 @@ -76,6 +76,7 @@ class Status < ApplicationRecord
@@ -1525,7 +1464,7 @@ index 4f2ceb9ca9..1e3e7b696a 100644
  
    # The `dependent` option is enabled by the initial `mentions` association declaration
    has_many :active_mentions, -> { active }, class_name: 'Mention', inverse_of: :status # rubocop:disable Rails/HasManyOrHasOneDependent
-@@ -287,6 +288,21 @@ class Status < ApplicationRecord
+@@ -287,6 +288,21 @@ def emojis
      @emojis = CustomEmoji.from_text(fields.join(' '), account.domain)
    end
  
@@ -1549,7 +1488,7 @@ index 4f2ceb9ca9..1e3e7b696a 100644
        # NOTE: sort Ruby-side to avoid hitting the database when the status is
 diff --git a/app/models/status_reaction.rb b/app/models/status_reaction.rb
 new file mode 100644
-index 0000000000..bc6eda2a1c
+index 0000000000000..bc6eda2a1cc0f
 --- /dev/null
 +++ b/app/models/status_reaction.rb
 @@ -0,0 +1,33 @@
@@ -1587,10 +1526,10 @@ index 0000000000..bc6eda2a1c
 +  end
 +end
 diff --git a/app/models/user_settings.rb b/app/models/user_settings.rb
-index 3b245a4e46..71bda27e12 100644
+index 3b245a4e46194..71bda27e12dac 100644
 --- a/app/models/user_settings.rb
 +++ b/app/models/user_settings.rb
-@@ -18,6 +18,7 @@ class UserSettings
+@@ -18,6 +18,7 @@ class KeyError < Error; end
    setting :default_privacy, default: nil, in: %w(public unlisted private)
    setting :default_content_type, default: 'text/plain'
    setting :hide_followers_count, default: false
@@ -1599,10 +1538,10 @@ index 3b245a4e46..71bda27e12 100644
    setting_inverse_alias :indexable, :noindex
    setting_inverse_alias :show_followers_count, :hide_followers_count
 diff --git a/app/policies/status_policy.rb b/app/policies/status_policy.rb
-index fb60ca20ce..2bbabfeb2f 100644
+index fb60ca20ce351..2bbabfeb2faf3 100644
 --- a/app/policies/status_policy.rb
 +++ b/app/policies/status_policy.rb
-@@ -28,6 +28,10 @@ class StatusPolicy < ApplicationPolicy
+@@ -28,6 +28,10 @@ def favourite?
      show? && !blocking_author?
    end
  
@@ -1615,7 +1554,7 @@ index fb60ca20ce..2bbabfeb2f 100644
    end
 diff --git a/app/serializers/activitypub/emoji_reaction_serializer.rb b/app/serializers/activitypub/emoji_reaction_serializer.rb
 new file mode 100644
-index 0000000000..f8887f15b7
+index 0000000000000..f8887f15b7121
 --- /dev/null
 +++ b/app/serializers/activitypub/emoji_reaction_serializer.rb
 @@ -0,0 +1,39 @@
@@ -1660,7 +1599,7 @@ index 0000000000..f8887f15b7
 +end
 diff --git a/app/serializers/activitypub/undo_emoji_reaction_serializer.rb b/app/serializers/activitypub/undo_emoji_reaction_serializer.rb
 new file mode 100644
-index 0000000000..49f0c1c8fd
+index 0000000000000..49f0c1c8fd260
 --- /dev/null
 +++ b/app/serializers/activitypub/undo_emoji_reaction_serializer.rb
 @@ -0,0 +1,19 @@
@@ -1684,7 +1623,7 @@ index 0000000000..49f0c1c8fd
 +  end
 +end
 diff --git a/app/serializers/initial_state_serializer.rb b/app/serializers/initial_state_serializer.rb
-index 5bbb0fe4b4..b5b2d043f4 100644
+index 5bbb0fe4b4e50..b5b2d043f4847 100644
 --- a/app/serializers/initial_state_serializer.rb
 +++ b/app/serializers/initial_state_serializer.rb
 @@ -6,13 +6,17 @@ class InitialStateSerializer < ActiveModel::Serializer
@@ -1706,7 +1645,7 @@ index 5bbb0fe4b4..b5b2d043f4 100644
    def max_feed_hashtags
      TagFeed::LIMIT_PER_MODE
    end
-@@ -29,8 +33,8 @@ class InitialStateSerializer < ActiveModel::Serializer
+@@ -29,8 +33,8 @@ def poll_limits
    def meta
      store = default_meta_store
  
@@ -1717,7 +1656,7 @@ index 5bbb0fe4b4..b5b2d043f4 100644
        store[:boost_modal]       = object_account_user.setting_boost_modal
        store[:favourite_modal]   = object_account_user.setting_favourite_modal
        store[:delete_modal]      = object_account_user.setting_delete_modal
-@@ -46,6 +50,7 @@ class InitialStateSerializer < ActiveModel::Serializer
+@@ -46,6 +50,7 @@ def meta
        store[:default_content_type] = object_account_user.setting_default_content_type
        store[:system_emoji_font] = object_account_user.setting_system_emoji_font
        store[:show_trends]       = Setting.trends && object_account_user.setting_trends
@@ -1725,7 +1664,7 @@ index 5bbb0fe4b4..b5b2d043f4 100644
      else
        store[:auto_play_gif] = Setting.auto_play_gif
        store[:display_media] = Setting.display_media
-@@ -129,6 +134,10 @@ class InitialStateSerializer < ActiveModel::Serializer
+@@ -129,6 +134,10 @@ def default_meta_store
      }
    end
  
@@ -1737,10 +1676,10 @@ index 5bbb0fe4b4..b5b2d043f4 100644
      object.current_account.user
    end
 diff --git a/app/serializers/rest/instance_serializer.rb b/app/serializers/rest/instance_serializer.rb
-index cc557023ba..4b94ce53a6 100644
+index cc557023ba554..4b94ce53a60fb 100644
 --- a/app/serializers/rest/instance_serializer.rb
 +++ b/app/serializers/rest/instance_serializer.rb
-@@ -83,6 +83,10 @@ class REST::InstanceSerializer < ActiveModel::Serializer
+@@ -83,6 +83,10 @@ def configuration
        translation: {
          enabled: TranslationService.configured?,
        },
@@ -1752,10 +1691,10 @@ index cc557023ba..4b94ce53a6 100644
    end
  
 diff --git a/app/serializers/rest/notification_serializer.rb b/app/serializers/rest/notification_serializer.rb
-index 320bc86961..2137a5234c 100644
+index 320bc86961d92..2137a5234c8d1 100644
 --- a/app/serializers/rest/notification_serializer.rb
 +++ b/app/serializers/rest/notification_serializer.rb
-@@ -21,7 +21,7 @@ class REST::NotificationSerializer < ActiveModel::Serializer
+@@ -21,7 +21,7 @@ def group_key
    end
  
    def status_type?
@@ -1765,10 +1704,10 @@ index 320bc86961..2137a5234c 100644
  
    def report_type?
 diff --git a/app/serializers/rest/reaction_serializer.rb b/app/serializers/rest/reaction_serializer.rb
-index 1a5dca0183..b0f0732bf7 100644
+index 1a5dca0183d15..b0f0732bf766e 100644
 --- a/app/serializers/rest/reaction_serializer.rb
 +++ b/app/serializers/rest/reaction_serializer.rb
-@@ -21,6 +21,14 @@ class REST::ReactionSerializer < ActiveModel::Serializer
+@@ -21,6 +21,14 @@ def custom_emoji?
      object.custom_emoji.present?
    end
  
@@ -1783,7 +1722,7 @@ index 1a5dca0183..b0f0732bf7 100644
    def url
      full_asset_url(object.custom_emoji.image.url)
    end
-@@ -28,4 +36,10 @@ class REST::ReactionSerializer < ActiveModel::Serializer
+@@ -28,4 +36,10 @@ def url
    def static_url
      full_asset_url(object.custom_emoji.image.url(:static))
    end
@@ -1795,7 +1734,7 @@ index 1a5dca0183..b0f0732bf7 100644
 +  end
  end
 diff --git a/app/serializers/rest/status_serializer.rb b/app/serializers/rest/status_serializer.rb
-index 96bdd600cf..e57f89e8bc 100644
+index 96bdd600cfbcc..e57f89e8bcd49 100644
 --- a/app/serializers/rest/status_serializer.rb
 +++ b/app/serializers/rest/status_serializer.rb
 @@ -30,6 +30,7 @@ class REST::StatusSerializer < ActiveModel::Serializer
@@ -1806,7 +1745,7 @@ index 96bdd600cf..e57f89e8bc 100644
  
    has_one :preview_card, key: :card, serializer: REST::PreviewCardSerializer
    has_one :preloadable_poll, key: :poll, serializer: REST::PollSerializer
-@@ -158,6 +159,10 @@ class REST::StatusSerializer < ActiveModel::Serializer
+@@ -158,6 +159,10 @@ def ordered_mentions
      object.active_mentions.to_a.sort_by(&:id)
    end
  
@@ -1818,10 +1757,10 @@ index 96bdd600cf..e57f89e8bc 100644
  
    def relationships
 diff --git a/app/serializers/rest/v1/instance_serializer.rb b/app/serializers/rest/v1/instance_serializer.rb
-index 69ffaa346f..2a98f0cdeb 100644
+index 69ffaa346f9c4..2a98f0cdeb4e1 100644
 --- a/app/serializers/rest/v1/instance_serializer.rb
 +++ b/app/serializers/rest/v1/instance_serializer.rb
-@@ -97,6 +97,10 @@ class REST::V1::InstanceSerializer < ActiveModel::Serializer
+@@ -97,6 +97,10 @@ def configuration
          min_expiration: PollValidator::MIN_EXPIRATION,
          max_expiration: PollValidator::MAX_EXPIRATION,
        },
@@ -1834,7 +1773,7 @@ index 69ffaa346f..2a98f0cdeb 100644
  
 diff --git a/app/services/react_service.rb b/app/services/react_service.rb
 new file mode 100644
-index 0000000000..de2fd1de9c
+index 0000000000000..de2fd1de9c6dc
 --- /dev/null
 +++ b/app/services/react_service.rb
 @@ -0,0 +1,31 @@
@@ -1871,7 +1810,7 @@ index 0000000000..de2fd1de9c
 +end
 diff --git a/app/services/unreact_service.rb b/app/services/unreact_service.rb
 new file mode 100644
-index 0000000000..7c1b32e94f
+index 0000000000000..7c1b32e94f1ad
 --- /dev/null
 +++ b/app/services/unreact_service.rb
 @@ -0,0 +1,23 @@
@@ -1900,7 +1839,7 @@ index 0000000000..7c1b32e94f
 +end
 diff --git a/app/validators/status_reaction_validator.rb b/app/validators/status_reaction_validator.rb
 new file mode 100644
-index 0000000000..046476de9d
+index 0000000000000..046476de9d69e
 --- /dev/null
 +++ b/app/validators/status_reaction_validator.rb
 @@ -0,0 +1,28 @@
@@ -1933,7 +1872,7 @@ index 0000000000..046476de9d
 +  end
 +end
 diff --git a/app/views/settings/preferences/appearance/show.html.haml b/app/views/settings/preferences/appearance/show.html.haml
-index b0cd1cba09..3acffcf33a 100644
+index b0cd1cba09d63..3acffcf33a1ef 100644
 --- a/app/views/settings/preferences/appearance/show.html.haml
 +++ b/app/views/settings/preferences/appearance/show.html.haml
 @@ -52,6 +52,9 @@
@@ -1948,7 +1887,7 @@ index b0cd1cba09..3acffcf33a 100644
      .fields-group
 diff --git a/app/workers/unreact_worker.rb b/app/workers/unreact_worker.rb
 new file mode 100644
-index 0000000000..15f1f4dd77
+index 0000000000000..15f1f4dd7752c
 --- /dev/null
 +++ b/app/workers/unreact_worker.rb
 @@ -0,0 +1,11 @@
@@ -1964,7 +1903,7 @@ index 0000000000..15f1f4dd77
 +  end
 +end
 diff --git a/config/locales-glitch/en.yml b/config/locales-glitch/en.yml
-index 1485ee174d..43b8ca6c72 100644
+index 1485ee174d7ee..43b8ca6c7213b 100644
 --- a/config/locales-glitch/en.yml
 +++ b/config/locales-glitch/en.yml
 @@ -38,5 +38,10 @@ en:
@@ -1979,7 +1918,7 @@ index 1485ee174d..43b8ca6c72 100644
    settings:
      flavours: Flavours
 diff --git a/config/locales-glitch/simple_form.en.yml b/config/locales-glitch/simple_form.en.yml
-index 9e943133bd..9de3f945ce 100644
+index 9e943133bd989..9de3f945ce9f6 100644
 --- a/config/locales-glitch/simple_form.en.yml
 +++ b/config/locales-glitch/simple_form.en.yml
 @@ -20,6 +20,7 @@ en:
@@ -1991,10 +1930,10 @@ index 9e943133bd..9de3f945ce 100644
          trending_link: New trending link requires review
          trending_status: New trending post requires review
 diff --git a/config/routes/api.rb b/config/routes/api.rb
-index 2267dc9b97..4f0207fa2f 100644
+index 2267dc9b97094..4f0207fa2f6e6 100644
 --- a/config/routes/api.rb
 +++ b/config/routes/api.rb
-@@ -16,6 +16,11 @@ namespace :api, format: false do
+@@ -16,6 +16,11 @@
          resource :favourite, only: :create
          post :unfavourite, to: 'favourites#destroy'
  
@@ -2007,7 +1946,7 @@ index 2267dc9b97..4f0207fa2f 100644
          post :unbookmark, to: 'bookmarks#destroy'
  
 diff --git a/config/settings.yml b/config/settings.yml
-index 11fb6eeafc..360a31cc2c 100644
+index 11fb6eeafcf38..360a31cc2ce22 100644
 --- a/config/settings.yml
 +++ b/config/settings.yml
 @@ -22,6 +22,7 @@ defaults: &defaults
@@ -2020,7 +1959,7 @@ index 11fb6eeafc..360a31cc2c 100644
      - admin
 diff --git a/db/migrate/20221124114030_create_status_reactions.rb b/db/migrate/20221124114030_create_status_reactions.rb
 new file mode 100644
-index 0000000000..7e6e87e7bb
+index 0000000000000..7e6e87e7bbf91
 --- /dev/null
 +++ b/db/migrate/20221124114030_create_status_reactions.rb
 @@ -0,0 +1,16 @@
@@ -2040,33 +1979,9 @@ index 0000000000..7e6e87e7bb
 +    add_index :status_reactions, [:account_id, :status_id, :name], unique: true, name: :index_status_reactions_on_account_id_and_status_id
 +  end
 +end
-diff --git a/db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb b/db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb
-new file mode 100644
-index 0000000000..916ad10773
---- /dev/null
-+++ b/db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb
-@@ -0,0 +1,18 @@
-+# frozen_string_literal: true
-+
-+class FixForeignKeysStatusReactions < ActiveRecord::Migration[6.1]
-+  disable_ddl_transaction!
-+
-+  def change
-+    # Fixes an oversight in a previous version of the CreateStatusReactions migration
-+    remove_foreign_key :status_reactions, :accounts
-+    add_foreign_key :status_reactions, :accounts, on_delete: :cascade, validate: false
-+    validate_foreign_key :status_reactions, :accounts
-+    remove_foreign_key :status_reactions, :statuses
-+    add_foreign_key :status_reactions, :statuses, on_delete: :cascade, validate: false
-+    validate_foreign_key :status_reactions, :statuses
-+    remove_foreign_key :status_reactions, :custom_emojis
-+    add_foreign_key :status_reactions, :custom_emojis, on_delete: :cascade, validate: false
-+    validate_foreign_key :status_reactions, :custom_emojis
-+  end
-+end
 diff --git a/db/migrate/20230215074425_move_emoji_reaction_settings.rb b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
 new file mode 100644
-index 0000000000..420772b692
+index 0000000000000..420772b6923f1
 --- /dev/null
 +++ b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
 @@ -0,0 +1,49 @@
@@ -2120,10 +2035,10 @@ index 0000000000..420772b692
 +  end
 +end
 diff --git a/db/schema.rb b/db/schema.rb
-index ade9a6cd2e..87351374a4 100644
+index ade9a6cd2ece7..87351374a483d 100644
 --- a/db/schema.rb
 +++ b/db/schema.rb
-@@ -1043,6 +1043,18 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_08_125420) do
+@@ -1043,6 +1043,18 @@
      t.index ["status_id"], name: "index_status_pins_on_status_id"
    end
  
@@ -2142,7 +2057,7 @@ index ade9a6cd2e..87351374a4 100644
    create_table "status_stats", force: :cascade do |t|
      t.bigint "status_id", null: false
      t.bigint "replies_count", default: 0, null: false
-@@ -1379,6 +1391,9 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_08_125420) do
+@@ -1379,6 +1391,9 @@
    add_foreign_key "status_edits", "statuses", on_delete: :cascade
    add_foreign_key "status_pins", "accounts", name: "fk_d4cb435b62", on_delete: :cascade
    add_foreign_key "status_pins", "statuses", on_delete: :cascade
@@ -2154,7 +2069,7 @@ index ade9a6cd2e..87351374a4 100644
    add_foreign_key "status_trends", "statuses", on_delete: :cascade
 diff --git a/spec/fabricators/status_reaction_fabricator.rb b/spec/fabricators/status_reaction_fabricator.rb
 new file mode 100644
-index 0000000000..6c5e67e8a4
+index 0000000000000..6c5e67e8a4135
 --- /dev/null
 +++ b/spec/fabricators/status_reaction_fabricator.rb
 @@ -0,0 +1,8 @@
@@ -2168,21 +2083,18 @@ index 0000000000..6c5e67e8a4
 +end
 diff --git a/spec/models/status_reaction_spec.rb b/spec/models/status_reaction_spec.rb
 new file mode 100644
-index 0000000000..ccfa9ee8d8
+index 0000000000000..ccfa9ee8d8882
 --- /dev/null
 +++ b/spec/models/status_reaction_spec.rb
 @@ -0,0 +1,3 @@
 +# frozen_string_literal: true
 +
 +require 'rails_helper'
--- 
-2.46.0
 
-
-From f49b7019d660738237980d273774d4d13f053c37 Mon Sep 17 00:00:00 2001
+From 50f9f3d59274f2f3377d758b4f27d586ff977df0 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 10 Nov 2023 15:16:29 -0600
-Subject: [PATCH 02/29] Add notification emails for reactions
+Subject: [PATCH 02/28] Add notification emails for reactions
 
 ---
  app/javascript/images/mailer/icon_add.png     | Bin 0 -> 1417 bytes
@@ -2219,7 +2131,7 @@ literal 0
 HcmV?d00001
 
 diff --git a/app/mailers/notification_mailer.rb b/app/mailers/notification_mailer.rb
-index 4eb38ec340..f011b266f7 100644
+index 4eb38ec340620..f011b266f7a2a 100644
 --- a/app/mailers/notification_mailer.rb
 +++ b/app/mailers/notification_mailer.rb
 @@ -6,8 +6,8 @@ class NotificationMailer < ApplicationMailer
@@ -2233,7 +2145,7 @@ index 4eb38ec340..f011b266f7 100644
    after_action :set_list_headers!
  
    default to: -> { email_address_with_name(@user.email, @me.username) }
-@@ -40,6 +40,15 @@ class NotificationMailer < ApplicationMailer
+@@ -40,6 +40,15 @@ def favourite
      end
    end
  
@@ -2250,10 +2162,10 @@ index 4eb38ec340..f011b266f7 100644
      return unless @user.functional? && @status.present?
  
 diff --git a/app/models/user_settings.rb b/app/models/user_settings.rb
-index 71bda27e12..7d6c927bc9 100644
+index 71bda27e12dac..7d6c927bc9672 100644
 --- a/app/models/user_settings.rb
 +++ b/app/models/user_settings.rb
-@@ -45,6 +45,7 @@ class UserSettings
+@@ -45,6 +45,7 @@ class KeyError < Error; end
      setting :follow, default: true
      setting :reblog, default: false
      setting :favourite, default: false
@@ -2263,7 +2175,7 @@ index 71bda27e12..7d6c927bc9 100644
      setting :report, default: true
 diff --git a/app/views/notification_mailer/reaction.html.haml b/app/views/notification_mailer/reaction.html.haml
 new file mode 100644
-index 0000000000..83ae41927d
+index 0000000000000..83ae41927d3f9
 --- /dev/null
 +++ b/app/views/notification_mailer/reaction.html.haml
 @@ -0,0 +1,45 @@
@@ -2314,7 +2226,7 @@ index 0000000000..83ae41927d
 +                                    %span= t 'application_mailer.view_status'
 diff --git a/app/views/notification_mailer/reaction.text.erb b/app/views/notification_mailer/reaction.text.erb
 new file mode 100644
-index 0000000000..fa30d708ea
+index 0000000000000..fa30d708eaa33
 --- /dev/null
 +++ b/app/views/notification_mailer/reaction.text.erb
 @@ -0,0 +1,5 @@
@@ -2324,7 +2236,7 @@ index 0000000000..fa30d708ea
 +
 +<%= render 'status', status: @status %>
 diff --git a/app/views/settings/preferences/notifications/show.html.haml b/app/views/settings/preferences/notifications/show.html.haml
-index 17d5ac20fa..76cffb3124 100644
+index 17d5ac20fad68..76cffb31244e4 100644
 --- a/app/views/settings/preferences/notifications/show.html.haml
 +++ b/app/views/settings/preferences/notifications/show.html.haml
 @@ -17,6 +17,7 @@
@@ -2336,7 +2248,7 @@ index 17d5ac20fa..76cffb3124 100644
  
      .fields-group
 diff --git a/config/locales-glitch/simple_form.en.yml b/config/locales-glitch/simple_form.en.yml
-index 9de3f945ce..a9361bf192 100644
+index 9de3f945ce9f6..a9361bf192a39 100644
 --- a/config/locales-glitch/simple_form.en.yml
 +++ b/config/locales-glitch/simple_form.en.yml
 @@ -22,6 +22,7 @@ en:
@@ -2347,21 +2259,18 @@ index 9de3f945ce..a9361bf192 100644
          trending_link: New trending link requires review
          trending_status: New trending post requires review
          trending_tag: New trending tag requires review
--- 
-2.46.0
 
-
-From 19985316c11ef8ebf62bf97dbcd004f061720c6a Mon Sep 17 00:00:00 2001
+From 917f87645164e374628101ae7232d261b4940dd6 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 10 Nov 2023 17:36:40 -0600
-Subject: [PATCH 03/29] Fix reblog reactions
+Subject: [PATCH 03/28] Fix reblog reactions
 
 ---
  app/models/status_reaction.rb | 4 ++++
  1 file changed, 4 insertions(+)
 
 diff --git a/app/models/status_reaction.rb b/app/models/status_reaction.rb
-index bc6eda2a1c..2fdb3da0ac 100644
+index bc6eda2a1cc0f..2fdb3da0ac62e 100644
 --- a/app/models/status_reaction.rb
 +++ b/app/models/status_reaction.rb
 @@ -22,6 +22,10 @@ class StatusReaction < ApplicationRecord
@@ -2375,14 +2284,11 @@ index bc6eda2a1c..2fdb3da0ac 100644
    before_validation :set_custom_emoji
  
    private
--- 
-2.46.0
 
-
-From 5784df9490666d2783a28cb024528572932710d5 Mon Sep 17 00:00:00 2001
+From 013a47ed04739c05724430cb444501ae37b71562 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 12 Nov 2023 20:59:36 -0600
-Subject: [PATCH 04/29] Refactor react services
+Subject: [PATCH 04/28] Refactor react services
 
 ---
  app/services/react_service.rb   | 27 +++++++++++++++++++++------
@@ -2390,10 +2296,10 @@ Subject: [PATCH 04/29] Refactor react services
  2 files changed, 32 insertions(+), 13 deletions(-)
 
 diff --git a/app/services/react_service.rb b/app/services/react_service.rb
-index de2fd1de9c..cfc3f99a78 100644
+index de2fd1de9c6dc..cfc3f99a78041 100644
 --- a/app/services/react_service.rb
 +++ b/app/services/react_service.rb
-@@ -16,16 +16,31 @@ class ReactService < BaseService
+@@ -16,16 +16,31 @@ def call(account, status, emoji)
  
      reaction = StatusReaction.create!(account: account, status: status, name: name, custom_emoji: custom_emoji)
  
@@ -2432,10 +2338,10 @@ index de2fd1de9c..cfc3f99a78 100644
    end
  end
 diff --git a/app/services/unreact_service.rb b/app/services/unreact_service.rb
-index 7c1b32e94f..49d232e931 100644
+index 7c1b32e94f1ad..49d232e931418 100644
 --- a/app/services/unreact_service.rb
 +++ b/app/services/unreact_service.rb
-@@ -10,14 +10,18 @@ class UnreactService < BaseService
+@@ -10,14 +10,18 @@ def call(account, status, emoji)
      return if reaction.nil?
  
      reaction.destroy!
@@ -2461,14 +2367,11 @@ index 7c1b32e94f..49d232e931 100644
 +    Oj.dump(serialize_payload(reaction, ActivityPub::UndoEmojiReactionSerializer))
    end
  end
--- 
-2.46.0
 
-
-From 41311dfc8eb63b5ac81bbf92ebf92bb779b4643a Mon Sep 17 00:00:00 2001
+From 829efbf6b6d93b7cf19c188b03f345833559228c Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Mon, 18 Dec 2023 18:27:02 -0600
-Subject: [PATCH 05/29] Linting fixes
+Subject: [PATCH 05/28] Linting fixes
 
 ---
  .../flavours/glitch/components/status_reactions.jsx         | 6 +++---
@@ -2477,7 +2380,7 @@ Subject: [PATCH 05/29] Linting fixes
  3 files changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/components/status_reactions.jsx b/app/javascript/flavours/glitch/components/status_reactions.jsx
-index e3ae79958b..81443d2055 100644
+index e3ae79958b408..81443d20555e1 100644
 --- a/app/javascript/flavours/glitch/components/status_reactions.jsx
 +++ b/app/javascript/flavours/glitch/components/status_reactions.jsx
 @@ -96,11 +96,11 @@ class Reaction extends ImmutablePureComponent {
@@ -2496,10 +2399,10 @@ index e3ae79958b..81443d2055 100644
    render() {
      const { reaction } = this.props;
 diff --git a/app/models/status.rb b/app/models/status.rb
-index 1e3e7b696a..f10da9aa9e 100644
+index 1e3e7b696a4d9..f10da9aa9ed10 100644
 --- a/app/models/status.rb
 +++ b/app/models/status.rb
-@@ -295,7 +295,9 @@ class Status < ApplicationRecord
+@@ -295,7 +295,9 @@ def reactions(account = nil)
        if account.nil?
          scope.select('name, custom_emoji_id, count(*) as count, false as me')
        else
@@ -2510,7 +2413,7 @@ index 1e3e7b696a..f10da9aa9e 100644
      end
  
 diff --git a/app/views/settings/preferences/appearance/show.html.haml b/app/views/settings/preferences/appearance/show.html.haml
-index 3acffcf33a..fa0965d89a 100644
+index 3acffcf33a1ef..fa0965d89a639 100644
 --- a/app/views/settings/preferences/appearance/show.html.haml
 +++ b/app/views/settings/preferences/appearance/show.html.haml
 @@ -53,7 +53,7 @@
@@ -2522,115 +2425,11 @@ index 3acffcf33a..fa0965d89a 100644
  
      %h4= t 'appearance.discovery'
  
--- 
-2.46.0
 
-
-From 579594d39e75731f5864e767c7e23edf0215edad Mon Sep 17 00:00:00 2001
-From: Essem <smswessem@gmail.com>
-Date: Tue, 19 Dec 2023 22:14:22 -0600
-Subject: [PATCH 06/29] More cleanup
-
----
- app/javascript/flavours/glitch/locales/en.json |  3 +--
- app/javascript/mastodon/locales/en.json        |  3 ---
- app/javascript/mastodon/reducers/settings.js   |  2 --
- ...015350_fix_foreign_keys_status_reactions.rb | 18 ------------------
- 4 files changed, 1 insertion(+), 25 deletions(-)
- delete mode 100644 db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb
-
-diff --git a/app/javascript/flavours/glitch/locales/en.json b/app/javascript/flavours/glitch/locales/en.json
-index 9b7bccbd65..2739431c15 100644
---- a/app/javascript/flavours/glitch/locales/en.json
-+++ b/app/javascript/flavours/glitch/locales/en.json
-@@ -156,6 +156,5 @@
-   "status.local_only": "Only visible from your instance",
-   "status.react": "React",
-   "status.uncollapse": "Uncollapse",
--  "suggestions.dismiss": "Dismiss suggestion",
--  "tooltips.reactions": "Reactions"
-+  "suggestions.dismiss": "Dismiss suggestion"
- }
-diff --git a/app/javascript/mastodon/locales/en.json b/app/javascript/mastodon/locales/en.json
-index 3c06d9776c..39d3e2dfca 100644
---- a/app/javascript/mastodon/locales/en.json
-+++ b/app/javascript/mastodon/locales/en.json
-@@ -556,7 +556,6 @@
-   "notifications.column_settings.mention": "Mentions:",
-   "notifications.column_settings.poll": "Poll results:",
-   "notifications.column_settings.push": "Push notifications",
--  "notifications.column_settings.reaction": "Reactions:",
-   "notifications.column_settings.reblog": "Boosts:",
-   "notifications.column_settings.show": "Show in column",
-   "notifications.column_settings.sound": "Play sound",
-@@ -796,7 +795,6 @@
-   "status.pin": "Pin on profile",
-   "status.pinned": "Pinned post",
-   "status.read_more": "Read more",
--  "status.react": "React",
-   "status.reblog": "Boost",
-   "status.reblog_private": "Boost with original visibility",
-   "status.reblogged_by": "{name} boosted",
-@@ -837,7 +835,6 @@
-   "timeline_hint.resources.follows": "Follows",
-   "timeline_hint.resources.replies": "Some replies",
-   "timeline_hint.resources.statuses": "Older posts",
--  "tooltips.reactions": "Reactions",
-   "trends.counter_by_accounts": "{count, plural, one {{counter} person} other {{counter} people}} in the past {days, plural, one {day} other {{days} days}}",
-   "trends.trending_now": "Trending now",
-   "ui.beforeunload": "Your draft will be lost if you leave Mastodon.",
-diff --git a/app/javascript/mastodon/reducers/settings.js b/app/javascript/mastodon/reducers/settings.js
-index 7f0071f157..6f55241dc1 100644
---- a/app/javascript/mastodon/reducers/settings.js
-+++ b/app/javascript/mastodon/reducers/settings.js
-@@ -57,7 +57,6 @@ const initialState = ImmutableMap({
-       follow: true,
-       follow_request: false,
-       favourite: true,
--      reaction: true,
-       reblog: true,
-       mention: true,
-       poll: true,
-@@ -71,7 +70,6 @@ const initialState = ImmutableMap({
-       follow: true,
-       follow_request: false,
-       favourite: true,
--      reaction: true,
-       reblog: true,
-       mention: true,
-       poll: true,
-diff --git a/db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb b/db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb
-deleted file mode 100644
-index 916ad10773..0000000000
---- a/db/migrate/20221218015350_fix_foreign_keys_status_reactions.rb
-+++ /dev/null
-@@ -1,18 +0,0 @@
--# frozen_string_literal: true
--
--class FixForeignKeysStatusReactions < ActiveRecord::Migration[6.1]
--  disable_ddl_transaction!
--
--  def change
--    # Fixes an oversight in a previous version of the CreateStatusReactions migration
--    remove_foreign_key :status_reactions, :accounts
--    add_foreign_key :status_reactions, :accounts, on_delete: :cascade, validate: false
--    validate_foreign_key :status_reactions, :accounts
--    remove_foreign_key :status_reactions, :statuses
--    add_foreign_key :status_reactions, :statuses, on_delete: :cascade, validate: false
--    validate_foreign_key :status_reactions, :statuses
--    remove_foreign_key :status_reactions, :custom_emojis
--    add_foreign_key :status_reactions, :custom_emojis, on_delete: :cascade, validate: false
--    validate_foreign_key :status_reactions, :custom_emojis
--  end
--end
--- 
-2.46.0
-
-
-From 4f594074aaa78f30499ecc2d0ce995f38ae58a91 Mon Sep 17 00:00:00 2001
+From 29ec04c430aea8050b834f4c36fe2c367e090bd8 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 19 Dec 2023 22:15:34 -0600
-Subject: [PATCH 07/29] Add reaction notification column settings This was in a
+Subject: [PATCH 06/28] Add reaction notification column settings This was in a
  previous PR. Not quite sure how it didn't carry over.
 
 ---
@@ -2638,7 +2437,7 @@ Subject: [PATCH 07/29] Add reaction notification column settings This was in a
  1 file changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/app/javascript/flavours/glitch/features/notifications/components/column_settings.jsx b/app/javascript/flavours/glitch/features/notifications/components/column_settings.jsx
-index f98d09b500..d78fbbbdb8 100644
+index f98d09b500004..d78fbbbdb8ba3 100644
 --- a/app/javascript/flavours/glitch/features/notifications/components/column_settings.jsx
 +++ b/app/javascript/flavours/glitch/features/notifications/components/column_settings.jsx
 @@ -71,7 +71,7 @@ class ColumnSettings extends PureComponent {
@@ -2668,24 +2467,21 @@ index f98d09b500..d78fbbbdb8 100644
          <section role='group' aria-labelledby='notifications-mention'>
            <h3 id='notifications-mention'><FormattedMessage id='notifications.column_settings.mention' defaultMessage='Mentions:' /></h3>
  
--- 
-2.46.0
 
-
-From a601355a5d68196b2b1ad37cfb1e2f2628bbd79a Mon Sep 17 00:00:00 2001
+From f307ab4c02289a647c006e2cbf1e6bbdee6adc1d Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 22 Dec 2023 16:09:43 -0600
-Subject: [PATCH 08/29] Fix rubocop complaint
+Subject: [PATCH 07/28] Fix rubocop complaint
 
 ---
  db/migrate/20230215074425_move_emoji_reaction_settings.rb | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/db/migrate/20230215074425_move_emoji_reaction_settings.rb b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
-index 420772b692..6d2d5e167a 100644
+index 420772b6923f1..6d2d5e167ad9c 100644
 --- a/db/migrate/20230215074425_move_emoji_reaction_settings.rb
 +++ b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
-@@ -42,7 +42,7 @@ class MoveEmojiReactionSettings < ActiveRecord::Migration[6.1]
+@@ -42,7 +42,7 @@ def up
            end
          end
  
@@ -2694,14 +2490,11 @@ index 420772b692..6d2d5e167a 100644
        end
      end
    end
--- 
-2.46.0
 
-
-From cfb83f76b97d9b416fec9f86c0543fc3f4533523 Mon Sep 17 00:00:00 2001
+From fd584bc5299a8c1cb525b2040d51ddd2855d150a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 26 Dec 2023 14:04:53 -0600
-Subject: [PATCH 09/29] Check for content attribute in Misskey likes
+Subject: [PATCH 08/28] Check for content attribute in Misskey likes
 
 ---
  app/lib/activitypub/activity/like.rb | 7 ++++---
@@ -2709,10 +2502,10 @@ Subject: [PATCH 09/29] Check for content attribute in Misskey likes
  2 files changed, 5 insertions(+), 4 deletions(-)
 
 diff --git a/app/lib/activitypub/activity/like.rb b/app/lib/activitypub/activity/like.rb
-index 86d70e0d70..f6c8769fee 100644
+index 86d70e0d70822..f6c8769fee4ca 100644
 --- a/app/lib/activitypub/activity/like.rb
 +++ b/app/lib/activitypub/activity/like.rb
-@@ -15,11 +15,12 @@ class ActivityPub::Activity::Like < ActivityPub::Activity
+@@ -15,11 +15,12 @@ def perform
      Trends.statuses.register(original_status)
    end
  
@@ -2729,10 +2522,10 @@ index 86d70e0d70..f6c8769fee 100644
  
      if /^:.*:$/.match?(name)
 diff --git a/app/lib/activitypub/activity/undo.rb b/app/lib/activitypub/activity/undo.rb
-index 5efcfdc99f..5f9f1bbecb 100644
+index 5efcfdc99f2d4..5f9f1bbecbfaf 100644
 --- a/app/lib/activitypub/activity/undo.rb
 +++ b/app/lib/activitypub/activity/undo.rb
-@@ -110,7 +110,7 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+@@ -110,7 +110,7 @@ def undo_like
      if @account.favourited?(status)
        favourite = status.favourites.where(account: @account).first
        favourite&.destroy
@@ -2741,24 +2534,21 @@ index 5efcfdc99f..5f9f1bbecb 100644
        undo_emoji_react
      else
        delete_later!(object_uri)
--- 
-2.46.0
 
-
-From 31bbb5d9c9785cde818b33327d60dc06fac54c29 Mon Sep 17 00:00:00 2001
+From 6937dbddcd9774e77c58a7d9f9d2fd4243fdb9b0 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 13 Jan 2024 18:16:57 -0600
-Subject: [PATCH 10/29] Normalize emojis with variant selectors
+Subject: [PATCH 09/28] Normalize emojis with variant selectors
 
 ---
  app/services/react_service.rb | 3 +++
  1 file changed, 3 insertions(+)
 
 diff --git a/app/services/react_service.rb b/app/services/react_service.rb
-index cfc3f99a78..be19bd8501 100644
+index cfc3f99a78041..be19bd850179e 100644
 --- a/app/services/react_service.rb
 +++ b/app/services/react_service.rb
-@@ -10,6 +10,9 @@ class ReactService < BaseService
+@@ -10,6 +10,9 @@ def call(account, status, emoji)
      name, domain = emoji.split('@')
      return unless domain.nil? || status.local?
  
@@ -2768,24 +2558,21 @@ index cfc3f99a78..be19bd8501 100644
      custom_emoji = CustomEmoji.find_by(shortcode: name, domain: domain)
      reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
      return reaction unless reaction.nil?
--- 
-2.46.0
 
-
-From 87dbfbd34f7ef122b51916efc258ed5bff549ce9 Mon Sep 17 00:00:00 2001
+From 43e2392e3962fe44ed0815472f31382c4ce54fe9 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 13 Jan 2024 18:18:36 -0600
-Subject: [PATCH 11/29] Make name of like content parser function more general
+Subject: [PATCH 10/28] Make name of like content parser function more general
 
 ---
  app/lib/activitypub/activity/like.rb | 8 ++++----
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/app/lib/activitypub/activity/like.rb b/app/lib/activitypub/activity/like.rb
-index f6c8769fee..0063820825 100644
+index f6c8769fee4ca..006382082549a 100644
 --- a/app/lib/activitypub/activity/like.rb
 +++ b/app/lib/activitypub/activity/like.rb
-@@ -5,7 +5,7 @@ class ActivityPub::Activity::Like < ActivityPub::Activity
+@@ -5,7 +5,7 @@ def perform
      original_status = status_from_uri(object_uri)
      return if original_status.nil? || !original_status.account.local? || delete_arrived_first?(@json['id'])
  
@@ -2794,7 +2581,7 @@ index f6c8769fee..0063820825 100644
  
      return if @account.favourited?(original_status)
  
-@@ -15,10 +15,10 @@ class ActivityPub::Activity::Like < ActivityPub::Activity
+@@ -15,10 +15,10 @@ def perform
      Trends.statuses.register(original_status)
    end
  
@@ -2808,14 +2595,11 @@ index f6c8769fee..0063820825 100644
      original_status = status_from_uri(object_uri)
      name = @json['content'] || @json['_misskey_reaction']
      return false if name.nil?
--- 
-2.46.0
 
-
-From e451f43ba5fcc0de660dd4b693948efd00302cab Mon Sep 17 00:00:00 2001
+From 2010d24cd4109381eb01deafe7d6a04f84c61d1d Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 14 Jan 2024 15:47:55 -0600
-Subject: [PATCH 12/29] Quick fixes
+Subject: [PATCH 11/28] Quick fixes
 
 ---
  .../flavours/glitch/features/status/components/action_bar.jsx   | 2 +-
@@ -2823,7 +2607,7 @@ Subject: [PATCH 12/29] Quick fixes
  2 files changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-index b2d10b8cdd..47b9c59cc3 100644
+index b2d10b8cdd4e4..47b9c59cc3af5 100644
 --- a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 @@ -238,7 +238,7 @@ class ActionBar extends PureComponent {
@@ -2836,7 +2620,7 @@ index b2d10b8cdd..47b9c59cc3 100644
          title={intl.formatMessage(messages.react)}
          disabled={!canReact}
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
-index 7e23cd553f..50268c8b99 100644
+index 7e23cd553f2bb..50268c8b99c9b 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 @@ -54,7 +54,6 @@ class DetailedStatus extends ImmutablePureComponent {
@@ -2847,14 +2631,11 @@ index 7e23cd553f..50268c8b99 100644
      ...WithRouterPropTypes,
    };
  
--- 
-2.46.0
 
-
-From fbd340946bc94a49f8cf3ece5a612549fe37df1b Mon Sep 17 00:00:00 2001
+From 39dc72216cea220e0ed14fcff0dbab2517ba4fc9 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 14 Jan 2024 15:59:27 -0600
-Subject: [PATCH 13/29] Move reaction normalization to API controller
+Subject: [PATCH 12/28] Move reaction normalization to API controller
 
 ---
  .../api/v1/statuses/reactions_controller.rb           | 11 +++++++++--
@@ -2862,7 +2643,7 @@ Subject: [PATCH 13/29] Move reaction normalization to API controller
  2 files changed, 9 insertions(+), 5 deletions(-)
 
 diff --git a/app/controllers/api/v1/statuses/reactions_controller.rb b/app/controllers/api/v1/statuses/reactions_controller.rb
-index 2d7e4f5984..1d8382f833 100644
+index 2d7e4f5984622..1d8382f833133 100644
 --- a/app/controllers/api/v1/statuses/reactions_controller.rb
 +++ b/app/controllers/api/v1/statuses/reactions_controller.rb
 @@ -8,12 +8,12 @@ class Api::V1::Statuses::ReactionsController < Api::BaseController
@@ -2880,7 +2661,7 @@ index 2d7e4f5984..1d8382f833 100644
  
      render json: @status, serializer: REST::StatusSerializer, relationships: StatusRelationshipsPresenter.new([@status], current_account.id, reactions_map: { @status.id => false })
    rescue Mastodon::NotPermittedError
-@@ -22,6 +22,13 @@ class Api::V1::Statuses::ReactionsController < Api::BaseController
+@@ -22,6 +22,13 @@ def destroy
  
    private
  
@@ -2895,10 +2676,10 @@ index 2d7e4f5984..1d8382f833 100644
      @status = Status.find(params[:status_id])
      authorize @status, :show?
 diff --git a/app/services/react_service.rb b/app/services/react_service.rb
-index be19bd8501..cfc3f99a78 100644
+index be19bd850179e..cfc3f99a78041 100644
 --- a/app/services/react_service.rb
 +++ b/app/services/react_service.rb
-@@ -10,9 +10,6 @@ class ReactService < BaseService
+@@ -10,9 +10,6 @@ def call(account, status, emoji)
      name, domain = emoji.split('@')
      return unless domain.nil? || status.local?
  
@@ -2908,14 +2689,11 @@ index be19bd8501..cfc3f99a78 100644
      custom_emoji = CustomEmoji.find_by(shortcode: name, domain: domain)
      reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
      return reaction unless reaction.nil?
--- 
-2.46.0
 
-
-From 7e4e910f37313c927b1105a5899fdb5c96e009b0 Mon Sep 17 00:00:00 2001
+From dc245f1795a9c50f9bb4a4486941598180b741be Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 17 Jan 2024 18:04:11 -0600
-Subject: [PATCH 14/29] Revert variant selector normalization
+Subject: [PATCH 13/28] Revert variant selector normalization
 
 Probably worth tackling later, but for now it's not worth worrying about; some other implementations (e.g. Misskey's) look to have the same behavior anyways.
 ---
@@ -2923,7 +2701,7 @@ Probably worth tackling later, but for now it's not worth worrying about; some o
  1 file changed, 2 insertions(+), 9 deletions(-)
 
 diff --git a/app/controllers/api/v1/statuses/reactions_controller.rb b/app/controllers/api/v1/statuses/reactions_controller.rb
-index 1d8382f833..2d7e4f5984 100644
+index 1d8382f833133..2d7e4f5984622 100644
 --- a/app/controllers/api/v1/statuses/reactions_controller.rb
 +++ b/app/controllers/api/v1/statuses/reactions_controller.rb
 @@ -8,12 +8,12 @@ class Api::V1::Statuses::ReactionsController < Api::BaseController
@@ -2941,7 +2719,7 @@ index 1d8382f833..2d7e4f5984 100644
  
      render json: @status, serializer: REST::StatusSerializer, relationships: StatusRelationshipsPresenter.new([@status], current_account.id, reactions_map: { @status.id => false })
    rescue Mastodon::NotPermittedError
-@@ -22,13 +22,6 @@ class Api::V1::Statuses::ReactionsController < Api::BaseController
+@@ -22,13 +22,6 @@ def destroy
  
    private
  
@@ -2955,14 +2733,11 @@ index 1d8382f833..2d7e4f5984 100644
    def set_status
      @status = Status.find(params[:status_id])
      authorize @status, :show?
--- 
-2.46.0
 
-
-From 0a24b91aa386bfd2868a254638e10493cb72b4e6 Mon Sep 17 00:00:00 2001
+From 17582e51e8e9763e65178bc951747240997b539d Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 18 Jan 2024 21:38:39 -0600
-Subject: [PATCH 15/29] Update reaction emails
+Subject: [PATCH 14/28] Update reaction emails
 
 Reaction icon made by t3rminus@calamity.world
 ---
@@ -3015,7 +2790,7 @@ literal 0
 HcmV?d00001
 
 diff --git a/app/views/notification_mailer/reaction.html.haml b/app/views/notification_mailer/reaction.html.haml
-index 83ae41927d..32427d58e5 100644
+index 83ae41927d3f9..32427d58e5177 100644
 --- a/app/views/notification_mailer/reaction.html.haml
 +++ b/app/views/notification_mailer/reaction.html.haml
 @@ -1,45 +1,13 @@
@@ -3076,21 +2851,18 @@ index 83ae41927d..32427d58e5 100644
 -                                    %span= t 'application_mailer.view_status'
 +                %td.email-padding-top-24
 +                  = render 'application/mailer/button', text: t('application_mailer.view_status'), url: web_url("@#{@status.account.pretty_acct}/#{@status.id}")
--- 
-2.46.0
 
-
-From 27361837a488d25c60043af54bdb36e812a1192a Mon Sep 17 00:00:00 2001
+From 95266dd8c6f1f40a4bdd7105d6a9f61952a8e157 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 23 Jan 2024 22:59:42 -0600
-Subject: [PATCH 16/29] Simplify reactions API controller
+Subject: [PATCH 15/28] Simplify reactions API controller
 
 ---
  .../api/v1/statuses/reactions_controller.rb        | 14 +-------------
  1 file changed, 1 insertion(+), 13 deletions(-)
 
 diff --git a/app/controllers/api/v1/statuses/reactions_controller.rb b/app/controllers/api/v1/statuses/reactions_controller.rb
-index 2d7e4f5984..c4b0fa307f 100644
+index 2d7e4f5984622..c4b0fa307f419 100644
 --- a/app/controllers/api/v1/statuses/reactions_controller.rb
 +++ b/app/controllers/api/v1/statuses/reactions_controller.rb
 @@ -1,11 +1,8 @@
@@ -3106,7 +2878,7 @@ index 2d7e4f5984..c4b0fa307f 100644
  
    def create
      ReactService.new.call(current_account, @status, params[:id])
-@@ -19,13 +16,4 @@ class Api::V1::Statuses::ReactionsController < Api::BaseController
+@@ -19,13 +16,4 @@ def destroy
    rescue Mastodon::NotPermittedError
      not_found
    end
@@ -3120,14 +2892,11 @@ index 2d7e4f5984..c4b0fa307f 100644
 -    not_found
 -  end
  end
--- 
-2.46.0
 
-
-From a2b006870b75b64cde7d1f2c69bfe7008189ef84 Mon Sep 17 00:00:00 2001
+From 96b93bd46a890ff8f5e0a9e893e76c2efeb5d633 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jan 2024 17:50:58 -0600
-Subject: [PATCH 17/29] Refactor status reactions query
+Subject: [PATCH 16/28] Refactor status reactions query
 
 This was done to announcement reactions in 1b0cb3b54d1a1b08922527aefc8135d56d3a1a8d. Might as well do it here too.
 ---
@@ -3135,10 +2904,10 @@ This was done to announcement reactions in 1b0cb3b54d1a1b08922527aefc8135d56d3a1
  1 file changed, 34 insertions(+), 12 deletions(-)
 
 diff --git a/app/models/status.rb b/app/models/status.rb
-index f10da9aa9e..71a90c1b67 100644
+index f10da9aa9ed10..71a90c1b67e8e 100644
 --- a/app/models/status.rb
 +++ b/app/models/status.rb
-@@ -289,20 +289,13 @@ class Status < ApplicationRecord
+@@ -289,20 +289,13 @@ def emojis
    end
  
    def reactions(account = nil)
@@ -3164,7 +2933,7 @@ index f10da9aa9e..71a90c1b67 100644
    end
  
    def ordered_media_attachments
-@@ -460,6 +453,35 @@ class Status < ApplicationRecord
+@@ -460,6 +453,35 @@ def unlink_from_conversations!
  
    private
  
@@ -3200,24 +2969,21 @@ index f10da9aa9e..71a90c1b67 100644
    def update_status_stat!(attrs)
      return if marked_for_destruction? || destroyed?
  
--- 
-2.46.0
 
-
-From f193ab59967805653074dd235a65a5583ce454d7 Mon Sep 17 00:00:00 2001
+From ddb1c4c987dc46b8782302cb019a3756aeaa1ad6 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 28 Jan 2024 14:51:10 -0600
-Subject: [PATCH 18/29] Fix rubocop lint issue
+Subject: [PATCH 17/28] Fix rubocop lint issue
 
 ---
  app/models/concerns/account/interactions.rb | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/app/models/concerns/account/interactions.rb b/app/models/concerns/account/interactions.rb
-index 02095e578e..9725d8aa38 100644
+index 02095e578e84b..9725d8aa38181 100644
 --- a/app/models/concerns/account/interactions.rb
 +++ b/app/models/concerns/account/interactions.rb
-@@ -236,7 +236,7 @@ module Account::Interactions
+@@ -236,7 +236,7 @@ def favourited?(status)
    end
  
    def reacted?(status, name, custom_emoji = nil)
@@ -3226,24 +2992,21 @@ index 02095e578e..9725d8aa38 100644
    end
  
    def bookmarked?(status)
--- 
-2.46.0
 
-
-From be8e0910027a571f936c6855424e9b9d13e3be06 Mon Sep 17 00:00:00 2001
+From 68698046ce286d7e2b20e6a17f46c00fc412a29a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 7 Feb 2024 17:14:16 -0600
-Subject: [PATCH 19/29] Purge status reactions on account delete
+Subject: [PATCH 18/28] Purge status reactions on account delete
 
 ---
  app/services/delete_account_service.rb | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
 diff --git a/app/services/delete_account_service.rb b/app/services/delete_account_service.rb
-index 328d8ae8f8..a3d77e54c8 100644
+index 328d8ae8f8396..a3d77e54c8ca4 100644
 --- a/app/services/delete_account_service.rb
 +++ b/app/services/delete_account_service.rb
-@@ -151,6 +151,7 @@ class DeleteAccountService < BaseService
+@@ -151,6 +151,7 @@ def purge_content!
      purge_polls!
      purge_generated_notifications!
      purge_favourites!
@@ -3251,7 +3014,7 @@ index 328d8ae8f8..a3d77e54c8 100644
      purge_bookmarks!
      purge_feeds!
      purge_other_associations!
-@@ -198,6 +199,15 @@ class DeleteAccountService < BaseService
+@@ -198,6 +199,15 @@ def purge_favourites!
      end
    end
  
@@ -3267,14 +3030,11 @@ index 328d8ae8f8..a3d77e54c8 100644
    def purge_bookmarks!
      @account.bookmarks.in_batches do |bookmarks|
        Chewy.strategy.current.update(StatusesIndex, bookmarks.pluck(:status_id)) if Chewy.enabled?
--- 
-2.46.0
 
-
-From fe7564e410f47ae8c82a0c392d4f09692e1f7df6 Mon Sep 17 00:00:00 2001
+From e3ce2078715219766f8a9b4ab7a6e9a304b024ed Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 9 Feb 2024 17:42:19 -0600
-Subject: [PATCH 20/29] Hydrate reactions on streaming API
+Subject: [PATCH 19/28] Hydrate reactions on streaming API
 
 ---
  app/lib/status_cache_hydrator.rb          | 13 +++++++++++++
@@ -3283,10 +3043,10 @@ Subject: [PATCH 20/29] Hydrate reactions on streaming API
  3 files changed, 19 insertions(+), 6 deletions(-)
 
 diff --git a/app/lib/status_cache_hydrator.rb b/app/lib/status_cache_hydrator.rb
-index 34f6199ec0..e3c9e49847 100644
+index 34f6199ec0efe..e3c9e49847edc 100644
 --- a/app/lib/status_cache_hydrator.rb
 +++ b/app/lib/status_cache_hydrator.rb
-@@ -32,6 +32,7 @@ class StatusCacheHydrator
+@@ -32,6 +32,7 @@ def hydrate_non_reblog_payload(empty_payload, account_id)
        payload[:bookmarked] = Bookmark.exists?(account_id: account_id, status_id: @status.id)
        payload[:pinned]     = StatusPin.exists?(account_id: account_id, status_id: @status.id) if @status.account_id == account_id
        payload[:filtered]   = mapped_applied_custom_filter(account_id, @status)
@@ -3294,7 +3054,7 @@ index 34f6199ec0..e3c9e49847 100644
  
        if payload[:poll]
          payload[:poll][:voted] = @status.account_id == account_id
-@@ -57,6 +58,7 @@ class StatusCacheHydrator
+@@ -57,6 +58,7 @@ def hydrate_reblog_payload(empty_payload, account_id)
        payload[:reblog][:bookmarked] = Bookmark.exists?(account_id: account_id, status_id: @status.reblog_of_id)
        payload[:reblog][:pinned]     = StatusPin.exists?(account_id: account_id, status_id: @status.reblog_of_id) if @status.reblog.account_id == account_id
        payload[:reblog][:filtered]   = payload[:filtered]
@@ -3302,7 +3062,7 @@ index 34f6199ec0..e3c9e49847 100644
  
        if payload[:reblog][:poll]
          if @status.reblog.account_id == account_id
-@@ -71,6 +73,7 @@ class StatusCacheHydrator
+@@ -71,6 +73,7 @@ def hydrate_reblog_payload(empty_payload, account_id)
  
        payload[:favourited] = payload[:reblog][:favourited]
        payload[:reblogged]  = payload[:reblog][:reblogged]
@@ -3310,7 +3070,7 @@ index 34f6199ec0..e3c9e49847 100644
      end
    end
  
-@@ -87,6 +90,16 @@ class StatusCacheHydrator
+@@ -87,6 +90,16 @@ def serialized_filter(filter)
      ).as_json
    end
  
@@ -3328,10 +3088,10 @@ index 34f6199ec0..e3c9e49847 100644
      @status.application.present? ? serialized_status_application_json : nil
    end
 diff --git a/app/models/status.rb b/app/models/status.rb
-index 71a90c1b67..b4c488d85f 100644
+index 71a90c1b67e8e..b4c488d85f8a5 100644
 --- a/app/models/status.rb
 +++ b/app/models/status.rb
-@@ -288,10 +288,10 @@ class Status < ApplicationRecord
+@@ -288,10 +288,10 @@ def emojis
      @emojis = CustomEmoji.from_text(fields.join(' '), account.domain)
    end
  
@@ -3344,7 +3104,7 @@ index 71a90c1b67..b4c488d85f 100644
        end
      ).to_a.tap do |records|
        ActiveRecord::Associations::Preloader.new(records: records, associations: :custom_emoji).call
-@@ -461,15 +461,15 @@ class Status < ApplicationRecord
+@@ -461,15 +461,15 @@ def grouped_ordered_status_reactions
        )
    end
  
@@ -3364,10 +3124,10 @@ index 71a90c1b67..b4c488d85f 100644
              AND inner_reactions.name = status_reactions.name
              AND (
 diff --git a/app/serializers/rest/status_serializer.rb b/app/serializers/rest/status_serializer.rb
-index e57f89e8bc..e3e8fde3b0 100644
+index e57f89e8bcd49..e3e8fde3b0a47 100644
 --- a/app/serializers/rest/status_serializer.rb
 +++ b/app/serializers/rest/status_serializer.rb
-@@ -160,7 +160,7 @@ class REST::StatusSerializer < ActiveModel::Serializer
+@@ -160,7 +160,7 @@ def ordered_mentions
    end
  
    def reactions
@@ -3376,14 +3136,11 @@ index e57f89e8bc..e3e8fde3b0 100644
    end
  
    private
--- 
-2.46.0
 
-
-From 8a6bac01b65ca0fe18de112944c000a9812de122 Mon Sep 17 00:00:00 2001
+From 068729b542af57a6439bacf58404a72c0a5f212e Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 24 Feb 2024 16:22:40 -0600
-Subject: [PATCH 21/29] Merge fixes
+Subject: [PATCH 20/28] Merge fixes
 
 ---
  .../features/compose/components/emoji_picker_dropdown.jsx       | 1 -
@@ -3391,7 +3148,7 @@ Subject: [PATCH 21/29] Merge fixes
  2 files changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-index a26d3e3888..4c7e74675a 100644
+index a26d3e3888dec..4c7e74675abc8 100644
 --- a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 +++ b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 @@ -402,7 +402,6 @@ class EmojiPickerDropdown extends PureComponent {
@@ -3403,10 +3160,10 @@ index a26d3e3888..4c7e74675a 100644
  
          <Overlay show={active} placement={placement} flip target={this.findTarget} popperConfig={{ strategy: 'fixed', onFirstUpdate: this.handleOverlayEnter }}>
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 48fd1767ed..cfc608e29f 100644
+index 67cf80d7c7c41..21e4a3e1d260c 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -9247,6 +9247,8 @@ noscript {
+@@ -9238,6 +9238,8 @@ noscript {
    }
  
    &--empty {
@@ -3415,14 +3172,11 @@ index 48fd1767ed..cfc608e29f 100644
      .emoji-button {
        padding: 0;
      }
--- 
-2.46.0
 
-
-From 4058038d234e8daa6e942337a34771586f718f27 Mon Sep 17 00:00:00 2001
+From 9a49b1fc030a888e11221cd39ff669bc3da2eb65 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 24 Feb 2024 17:20:38 -0600
-Subject: [PATCH 22/29] Fix reaction picker dropdown appearance
+Subject: [PATCH 21/28] Fix reaction picker dropdown appearance
 
 ---
  .../glitch/components/status_action_bar.jsx   | 18 +----------------
@@ -3437,7 +3191,7 @@ Subject: [PATCH 22/29] Fix reaction picker dropdown appearance
  create mode 100644 app/javascript/material-icons/400-24px/mood-fill.svg
 
 diff --git a/app/javascript/flavours/glitch/components/status_action_bar.jsx b/app/javascript/flavours/glitch/components/status_action_bar.jsx
-index 5e31a38edc..6813a74995 100644
+index 5e31a38edc569..6813a74995862 100644
 --- a/app/javascript/flavours/glitch/components/status_action_bar.jsx
 +++ b/app/javascript/flavours/glitch/components/status_action_bar.jsx
 @@ -213,8 +213,6 @@ class StatusActionBar extends ImmutablePureComponent {
@@ -3480,7 +3234,7 @@ index 5e31a38edc..6813a74995 100644
  
          {filterButton}
 diff --git a/app/javascript/flavours/glitch/components/status_prepend.jsx b/app/javascript/flavours/glitch/components/status_prepend.jsx
-index 6373edb19d..096bb5a5ac 100644
+index 6373edb19dffb..096bb5a5aced4 100644
 --- a/app/javascript/flavours/glitch/components/status_prepend.jsx
 +++ b/app/javascript/flavours/glitch/components/status_prepend.jsx
 @@ -6,10 +6,10 @@ import { FormattedMessage } from 'react-intl';
@@ -3507,7 +3261,7 @@ index 6373edb19d..096bb5a5ac 100644
      case 'featured':
        iconId = 'thumb-tack';
 diff --git a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-index 4c7e74675a..ac835d51ef 100644
+index 4c7e74675abc8..ac835d51ef82c 100644
 --- a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 +++ b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 @@ -327,6 +327,8 @@ class EmojiPickerDropdown extends PureComponent {
@@ -3542,7 +3296,7 @@ index 4c7e74675a..ac835d51ef 100644
          />
  
 diff --git a/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx b/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx
-index 9459b50ebc..12f3d2157f 100644
+index 9459b50ebc1d9..12f3d2157fee3 100644
 --- a/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/notifications/components/filter_bar.jsx
 @@ -3,9 +3,9 @@ import { PureComponent } from 'react';
@@ -3566,7 +3320,7 @@ index 9459b50ebc..12f3d2157f 100644
          <button
            className={selectedFilter === 'reblog' ? 'active' : ''}
 diff --git a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-index 47b9c59cc3..e40411a680 100644
+index 47b9c59cc3af5..e40411a680f89 100644
 --- a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 @@ -157,8 +157,6 @@ class ActionBar extends PureComponent {
@@ -3611,7 +3365,7 @@ index 47b9c59cc3..e40411a680 100644
  
          <div className='detailed-status__action-bar-dropdown'>
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index cfc608e29f..783a71e1a1 100644
+index 21e4a3e1d260c..d8dbad448102b 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
 @@ -1836,8 +1836,12 @@ body > [data-popper-placement] {
@@ -3631,28 +3385,25 @@ index cfc608e29f..783a71e1a1 100644
  
 diff --git a/app/javascript/material-icons/400-24px/mood-fill.svg b/app/javascript/material-icons/400-24px/mood-fill.svg
 new file mode 100644
-index 0000000000..9480d0fb92
+index 0000000000000..9480d0fb92aaa
 --- /dev/null
 +++ b/app/javascript/material-icons/400-24px/mood-fill.svg
 @@ -0,0 +1 @@
 +<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm140 260q68 0 123.5-38.5T684-400H276q25 63 80.5 101.5T480-260Zm0 180q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg>
 \ No newline at end of file
 diff --git a/app/javascript/material-icons/400-24px/mood.svg b/app/javascript/material-icons/400-24px/mood.svg
-index 27b3534244..9ea109ea9d 100644
+index 27b3534244888..9ea109ea9dc34 100644
 --- a/app/javascript/material-icons/400-24px/mood.svg
 +++ b/app/javascript/material-icons/400-24px/mood.svg
 @@ -1 +1 @@
 -<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"><path d="M620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm140 260q68 0 123.5-38.5T684-400H276q25 63 80.5 101.5T480-260Zm0 180q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z"/></svg>
 \ No newline at end of file
 +<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"><path d="M620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm140 260q68 0 123.5-38.5T684-400H276q25 63 80.5 101.5T480-260Zm0 180q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z"/></svg>
--- 
-2.46.0
 
-
-From 03ea6f99d5122aaaeabf4f0d507c7b154e3b5807 Mon Sep 17 00:00:00 2001
+From 73ecfa357e7796318e6044bfec2df9ee4d46bd6a Mon Sep 17 00:00:00 2001
 From: Jeremy Kescher <jeremy@kescher.at>
 Date: Tue, 21 May 2024 00:46:17 +0200
-Subject: [PATCH 23/29] [Glitch+Emoji reactions] Use modern React context for
+Subject: [PATCH 22/28] [Glitch+Emoji reactions] Use modern React context for
  for identity for emoji reaction code
 
 ---
@@ -3662,7 +3413,7 @@ Subject: [PATCH 23/29] [Glitch+Emoji reactions] Use modern React context for
  3 files changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/components/status.jsx b/app/javascript/flavours/glitch/components/status.jsx
-index a6167699ea..aa5db535c1 100644
+index a6167699ea58e..aa5db535c11fb 100644
 --- a/app/javascript/flavours/glitch/components/status.jsx
 +++ b/app/javascript/flavours/glitch/components/status.jsx
 @@ -12,6 +12,7 @@ import { HotKeys } from 'react-hotkeys';
@@ -3705,7 +3456,7 @@ index a6167699ea..aa5db535c1 100644
 -export default withOptionalRouter(injectIntl(Status));
 +export default withOptionalRouter(injectIntl((withIdentity(Status))));
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
-index 50268c8b99..d8c62aa16a 100644
+index 50268c8b99c9b..d8c62aa16a3f2 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 @@ -15,6 +15,7 @@ import { getHashtagBarForStatus } from 'flavours/glitch/components/hashtag_bar';
@@ -3746,7 +3497,7 @@ index 50268c8b99..d8c62aa16a 100644
 -export default withRouter(DetailedStatus);
 +export default withRouter(withIdentity(DetailedStatus));
 diff --git a/app/javascript/flavours/glitch/features/status/index.jsx b/app/javascript/flavours/glitch/features/status/index.jsx
-index dee554dc6f..8c58c06d3c 100644
+index dee554dc6f231..8c58c06d3c1d4 100644
 --- a/app/javascript/flavours/glitch/features/status/index.jsx
 +++ b/app/javascript/flavours/glitch/features/status/index.jsx
 @@ -282,8 +282,8 @@ class Status extends ImmutablePureComponent {
@@ -3760,14 +3511,11 @@ index dee554dc6f..8c58c06d3c 100644
  
      if (signedIn) {
        dispatch(addReaction(statusId, name, url));
--- 
-2.46.0
 
-
-From f1e469a21a7111b6eb99a7009525ba1805917dd8 Mon Sep 17 00:00:00 2001
+From e7b95369992148110432c745b2b54de18aca8eb6 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 16 Jun 2024 14:30:22 -0500
-Subject: [PATCH 24/29] Disable reactions in detailed status view when
+Subject: [PATCH 23/28] Disable reactions in detailed status view when
  visibleReactions is 0
 
 ---
@@ -3775,7 +3523,7 @@ Subject: [PATCH 24/29] Disable reactions in detailed status view when
  1 file changed, 3 insertions(+), 2 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
-index d8c62aa16a..d127a03620 100644
+index d8c62aa16a3f2..d127a03620ba9 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.jsx
 @@ -23,6 +23,7 @@ import { DisplayName } from '../../../components/display_name';
@@ -3802,14 +3550,11 @@ index d8c62aa16a..d127a03620 100644
  
            <div className='detailed-status__meta'>
              <div className='detailed-status__meta__line'>
--- 
-2.46.0
 
-
-From 333e301e30c78d788fcc1f2e4e66dcbff3e0c697 Mon Sep 17 00:00:00 2001
+From f2dc00cfae0aff2eaf5da141ef76f522efae7343 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 18 Jun 2024 14:10:37 -0500
-Subject: [PATCH 25/29] Turn custom emoji regexps into class level constants
+Subject: [PATCH 24/28] Turn custom emoji regexps into class level constants
 
 ---
  app/lib/activitypub/activity/emoji_react.rb | 4 +++-
@@ -3818,7 +3563,7 @@ Subject: [PATCH 25/29] Turn custom emoji regexps into class level constants
  3 files changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/app/lib/activitypub/activity/emoji_react.rb b/app/lib/activitypub/activity/emoji_react.rb
-index c9d88bc51c..ad9f9abbaa 100644
+index c9d88bc51c260..ad9f9abbaa3b9 100644
 --- a/app/lib/activitypub/activity/emoji_react.rb
 +++ b/app/lib/activitypub/activity/emoji_react.rb
 @@ -1,6 +1,8 @@
@@ -3830,7 +3575,7 @@ index c9d88bc51c..ad9f9abbaa 100644
    def perform
      original_status = status_from_uri(object_uri)
      name = @json['content']
-@@ -8,7 +10,7 @@ class ActivityPub::Activity::EmojiReact < ActivityPub::Activity
+@@ -8,7 +10,7 @@ def perform
                !original_status.account.local? ||
                delete_arrived_first?(@json['id'])
  
@@ -3840,7 +3585,7 @@ index c9d88bc51c..ad9f9abbaa 100644
        custom_emoji = process_emoji_tags(name, @json['tag'])
  
 diff --git a/app/lib/activitypub/activity/like.rb b/app/lib/activitypub/activity/like.rb
-index 0063820825..8856f7be4c 100644
+index 006382082549a..8856f7be4c1dc 100644
 --- a/app/lib/activitypub/activity/like.rb
 +++ b/app/lib/activitypub/activity/like.rb
 @@ -1,6 +1,8 @@
@@ -3852,7 +3597,7 @@ index 0063820825..8856f7be4c 100644
    def perform
      original_status = status_from_uri(object_uri)
      return if original_status.nil? || !original_status.account.local? || delete_arrived_first?(@json['id'])
-@@ -23,7 +25,7 @@ class ActivityPub::Activity::Like < ActivityPub::Activity
+@@ -23,7 +25,7 @@ def maybe_process_embedded_reaction
      name = @json['content'] || @json['_misskey_reaction']
      return false if name.nil?
  
@@ -3862,7 +3607,7 @@ index 0063820825..8856f7be4c 100644
        custom_emoji = process_emoji_tags(name, @json['tag'])
  
 diff --git a/app/lib/activitypub/activity/undo.rb b/app/lib/activitypub/activity/undo.rb
-index 5f9f1bbecb..0c7714d6ed 100644
+index 5f9f1bbecbfaf..0c7714d6edf0e 100644
 --- a/app/lib/activitypub/activity/undo.rb
 +++ b/app/lib/activitypub/activity/undo.rb
 @@ -1,6 +1,8 @@
@@ -3874,7 +3619,7 @@ index 5f9f1bbecb..0c7714d6ed 100644
    def perform
      case @object['type']
      when 'Announce'
-@@ -125,7 +127,7 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+@@ -125,7 +127,7 @@ def undo_emoji_react
  
      return if status.nil? || !status.account.local?
  
@@ -3883,14 +3628,11 @@ index 5f9f1bbecb..0c7714d6ed 100644
        name.delete! ':'
        custom_emoji = process_emoji_tags(name, @object['tag'])
  
--- 
-2.46.0
 
-
-From 4417590edeea9f73ea374f5ae9d1cfa3b766a8ae Mon Sep 17 00:00:00 2001
+From 4db564e496388b851f0f6bd38d071fc509eeefc2 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 18 Jul 2024 21:01:46 -0500
-Subject: [PATCH 26/29] Add notification grouping for reactions
+Subject: [PATCH 25/28] Add notification grouping for reactions
 
 ---
  .../glitch/api_types/notifications.ts         |  2 ++
@@ -3905,7 +3647,7 @@ Subject: [PATCH 26/29] Add notification grouping for reactions
  create mode 100644 app/javascript/flavours/glitch/features/notifications_v2/components/notification_reaction.tsx
 
 diff --git a/app/javascript/flavours/glitch/api_types/notifications.ts b/app/javascript/flavours/glitch/api_types/notifications.ts
-index 758840a581..7b9220facb 100644
+index 758840a5810a6..7b9220facb91b 100644
 --- a/app/javascript/flavours/glitch/api_types/notifications.ts
 +++ b/app/javascript/flavours/glitch/api_types/notifications.ts
 @@ -11,6 +11,7 @@ export const allNotificationTypes = [
@@ -3925,7 +3667,7 @@ index 758840a581..7b9220facb 100644
    | 'status'
    | 'mention'
 diff --git a/app/javascript/flavours/glitch/features/notifications_v2/components/notification_group.tsx b/app/javascript/flavours/glitch/features/notifications_v2/components/notification_group.tsx
-index f4275179c5..d43320f394 100644
+index f4275179c5efe..d43320f39467e 100644
 --- a/app/javascript/flavours/glitch/features/notifications_v2/components/notification_group.tsx
 +++ b/app/javascript/flavours/glitch/features/notifications_v2/components/notification_group.tsx
 @@ -15,6 +15,7 @@ import { NotificationFollowRequest } from './notification_follow_request';
@@ -3953,7 +3695,7 @@ index f4275179c5..d43320f394 100644
          <NotificationSeveredRelationships
 diff --git a/app/javascript/flavours/glitch/features/notifications_v2/components/notification_reaction.tsx b/app/javascript/flavours/glitch/features/notifications_v2/components/notification_reaction.tsx
 new file mode 100644
-index 0000000000..95dd4d850a
+index 0000000000000..95dd4d850a8ed
 --- /dev/null
 +++ b/app/javascript/flavours/glitch/features/notifications_v2/components/notification_reaction.tsx
 @@ -0,0 +1,34 @@
@@ -3992,7 +3734,7 @@ index 0000000000..95dd4d850a
 +  );
 +};
 diff --git a/app/javascript/flavours/glitch/features/notifications_v2/filter_bar.tsx b/app/javascript/flavours/glitch/features/notifications_v2/filter_bar.tsx
-index 1299796662..59d0effbd1 100644
+index 1299796662b1d..59d0effbd1b94 100644
 --- a/app/javascript/flavours/glitch/features/notifications_v2/filter_bar.tsx
 +++ b/app/javascript/flavours/glitch/features/notifications_v2/filter_bar.tsx
 @@ -5,6 +5,7 @@ import { defineMessages, FormattedMessage, useIntl } from 'react-intl';
@@ -4030,7 +3772,7 @@ index 1299796662..59d0effbd1 100644
            selectedFilter={selectedFilter}
            type='reblog'
 diff --git a/app/javascript/flavours/glitch/models/notification_group.ts b/app/javascript/flavours/glitch/models/notification_group.ts
-index 26a4d6be84..13681f88df 100644
+index 26a4d6be84468..13681f88df7e2 100644
 --- a/app/javascript/flavours/glitch/models/notification_group.ts
 +++ b/app/javascript/flavours/glitch/models/notification_group.ts
 @@ -31,6 +31,7 @@ interface BaseNotification<Type extends NotificationType>
@@ -4066,10 +3808,10 @@ index 26a4d6be84..13681f88df 100644
      case 'status':
      case 'mention':
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 783a71e1a1..068e39626b 100644
+index d8dbad448102b..9aa29e71b56c3 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -11030,6 +11030,10 @@ noscript {
+@@ -11021,6 +11021,10 @@ noscript {
      color: $gold-star;
    }
  
@@ -4081,10 +3823,10 @@ index 783a71e1a1..068e39626b 100644
      color: $valid-value-color;
    }
 diff --git a/app/serializers/rest/notification_group_serializer.rb b/app/serializers/rest/notification_group_serializer.rb
-index b855f1cba9..5cdf418218 100644
+index b855f1cba9c53..5cdf418218c85 100644
 --- a/app/serializers/rest/notification_group_serializer.rb
 +++ b/app/serializers/rest/notification_group_serializer.rb
-@@ -23,7 +23,7 @@ class REST::NotificationGroupSerializer < ActiveModel::Serializer
+@@ -23,7 +23,7 @@ def status_id
    end
  
    def status_type?
@@ -4094,10 +3836,10 @@ index b855f1cba9..5cdf418218 100644
  
    def report_type?
 diff --git a/app/services/notify_service.rb b/app/services/notify_service.rb
-index 695f4153c6..5f488348ec 100644
+index 695f4153c6c1a..5f488348ec60f 100644
 --- a/app/services/notify_service.rb
 +++ b/app/services/notify_service.rb
-@@ -237,7 +237,7 @@ class NotifyService < BaseService
+@@ -237,7 +237,7 @@ def call(recipient, type, activity)
    private
  
    def notification_group_key
@@ -4106,24 +3848,21 @@ index 695f4153c6..5f488348ec 100644
  
      type_prefix = "#{@notification.type}-#{@notification.target_status.id}"
      redis_key   = "notif-group/#{@recipient.id}/#{type_prefix}"
--- 
-2.46.0
 
-
-From aa8490c7ac1b7a4d207a93091cc725d4c69e6b10 Mon Sep 17 00:00:00 2001
+From fb0c1d8df4e8cf766327ae9165ce6040e1720736 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jul 2024 23:10:43 -0500
-Subject: [PATCH 27/29] Fix reactions bar alignment in grouped notifications
+Subject: [PATCH 26/28] Fix reactions bar alignment in grouped notifications
 
 ---
  app/javascript/flavours/glitch/styles/components.scss | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 068e39626b..5600a99f67 100644
+index 9aa29e71b56c3..84321054dbb93 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -11219,7 +11219,8 @@ noscript {
+@@ -11198,7 +11198,8 @@ noscript {
    $icon-margin: 48px; // 40px avatar + 8px gap
  
    .status__content,
@@ -4133,62 +3872,44 @@ index 068e39626b..5600a99f67 100644
      margin-inline-start: $icon-margin;
      width: calc(100% - $icon-margin);
    }
--- 
-2.46.0
 
-
-From 4e22027af29ac10ef45a59e3b2bd134728c8b2e4 Mon Sep 17 00:00:00 2001
+From f49d8617a7afca0f1d47c40e6bb2180744692833 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jul 2024 23:16:01 -0500
-Subject: [PATCH 28/29] Fix i18n
+Subject: [PATCH 27/28] Fix i18n
 
 ---
- app/javascript/flavours/glitch/locales/en.json | 3 +--
- app/javascript/mastodon/locales/en.json        | 1 -
- 2 files changed, 1 insertion(+), 3 deletions(-)
+ app/javascript/flavours/glitch/locales/en.json | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/locales/en.json b/app/javascript/flavours/glitch/locales/en.json
-index 2739431c15..f514daee42 100644
+index 9b7bccbd655fa..f514daee4270e 100644
 --- a/app/javascript/flavours/glitch/locales/en.json
 +++ b/app/javascript/flavours/glitch/locales/en.json
-@@ -155,6 +155,5 @@
+@@ -155,7 +155,5 @@
    "status.is_poll": "This toot is a poll",
    "status.local_only": "Only visible from your instance",
    "status.react": "React",
 -  "status.uncollapse": "Uncollapse",
--  "suggestions.dismiss": "Dismiss suggestion"
+-  "suggestions.dismiss": "Dismiss suggestion",
+-  "tooltips.reactions": "Reactions"
 +  "status.uncollapse": "Uncollapse"
  }
-diff --git a/app/javascript/mastodon/locales/en.json b/app/javascript/mastodon/locales/en.json
-index 39d3e2dfca..f56973a44a 100644
---- a/app/javascript/mastodon/locales/en.json
-+++ b/app/javascript/mastodon/locales/en.json
-@@ -510,7 +510,6 @@
-   "notification.own_poll": "Your poll has ended",
-   "notification.poll": "A poll you voted in has ended",
-   "notification.private_mention": "{name} privately mentioned you",
--  "notification.reaction": "{name} reacted to your post",
-   "notification.reblog": "{name} boosted your post",
-   "notification.relationships_severance_event": "Lost connections with {name}",
-   "notification.relationships_severance_event.account_suspension": "An admin from {from} has suspended {target}, which means you can no longer receive updates from them or interact with them.",
--- 
-2.46.0
 
-
-From 66806983cc0d7588a09a7a5cc871b321d556f52c Mon Sep 17 00:00:00 2001
+From b9af877f343b0e14a8dbbca0f8465367a70c69bb Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 4 Aug 2024 19:13:04 -0500
-Subject: [PATCH 29/29] Fix reblog reactions being hydrated improperly
+Subject: [PATCH 28/28] Fix reblog reactions being hydrated improperly
 
 ---
  app/lib/status_cache_hydrator.rb | 9 ++++-----
  1 file changed, 4 insertions(+), 5 deletions(-)
 
 diff --git a/app/lib/status_cache_hydrator.rb b/app/lib/status_cache_hydrator.rb
-index e3c9e49847..baeec20d52 100644
+index e3c9e49847edc..baeec20d52968 100644
 --- a/app/lib/status_cache_hydrator.rb
 +++ b/app/lib/status_cache_hydrator.rb
-@@ -32,7 +32,7 @@ class StatusCacheHydrator
+@@ -32,7 +32,7 @@ def hydrate_non_reblog_payload(empty_payload, account_id)
        payload[:bookmarked] = Bookmark.exists?(account_id: account_id, status_id: @status.id)
        payload[:pinned]     = StatusPin.exists?(account_id: account_id, status_id: @status.id) if @status.account_id == account_id
        payload[:filtered]   = mapped_applied_custom_filter(account_id, @status)
@@ -4197,7 +3918,7 @@ index e3c9e49847..baeec20d52 100644
  
        if payload[:poll]
          payload[:poll][:voted] = @status.account_id == account_id
-@@ -58,7 +58,7 @@ class StatusCacheHydrator
+@@ -58,7 +58,7 @@ def hydrate_reblog_payload(empty_payload, account_id)
        payload[:reblog][:bookmarked] = Bookmark.exists?(account_id: account_id, status_id: @status.reblog_of_id)
        payload[:reblog][:pinned]     = StatusPin.exists?(account_id: account_id, status_id: @status.reblog_of_id) if @status.reblog.account_id == account_id
        payload[:reblog][:filtered]   = payload[:filtered]
@@ -4206,7 +3927,7 @@ index e3c9e49847..baeec20d52 100644
  
        if payload[:reblog][:poll]
          if @status.reblog.account_id == account_id
-@@ -73,7 +73,6 @@ class StatusCacheHydrator
+@@ -73,7 +73,6 @@ def hydrate_reblog_payload(empty_payload, account_id)
  
        payload[:favourited] = payload[:reblog][:favourited]
        payload[:reblogged]  = payload[:reblog][:reblogged]
@@ -4214,7 +3935,7 @@ index e3c9e49847..baeec20d52 100644
      end
    end
  
-@@ -90,8 +89,8 @@ class StatusCacheHydrator
+@@ -90,8 +89,8 @@ def serialized_filter(filter)
      ).as_json
    end
  
@@ -4225,6 +3946,3 @@ index e3c9e49847..baeec20d52 100644
      ActiveModelSerializers::SerializableResource.new(
        reactions,
        each_serializer: REST::ReactionSerializer,
--- 
-2.46.0
-
