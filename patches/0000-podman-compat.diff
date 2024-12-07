@@ -1,5 +1,5 @@
 diff --git a/Dockerfile b/Dockerfile
-index 758db9b..682f064 100644
+index a5e3502..2ee04b8 100644
 --- a/Dockerfile
 +++ b/Dockerfile
 @@ -3,13 +3,6 @@
@@ -15,13 +15,13 @@ index 758db9b..682f064 100644
 -
  # Ruby image to use for base image, change with [--build-arg RUBY_VERSION="3.3.x"]
  # renovate: datasource=docker depName=docker.io/ruby
- ARG RUBY_VERSION="3.3.4"
+ ARG RUBY_VERSION="3.3.6"
 diff --git a/streaming/Dockerfile b/streaming/Dockerfile
-index d9f7615..ea61aa4 100644
+index bed6b63..6b3f872 100644
 --- a/streaming/Dockerfile
 +++ b/streaming/Dockerfile
 @@ -1,12 +1,5 @@
- # syntax=docker/dockerfile:1.9
+ # syntax=docker/dockerfile:1.12
  
 -# Please see https://docs.docker.com/engine/reference/builder for information about
 -# the extended buildx capabilities used in this file.
@@ -32,4 +32,4 @@ index d9f7615..ea61aa4 100644
 -
  # Node version to use in base image, change with [--build-arg NODE_MAJOR_VERSION="20"]
  # renovate: datasource=node-version depName=node
- ARG NODE_MAJOR_VERSION="20"
+ ARG NODE_MAJOR_VERSION="22"

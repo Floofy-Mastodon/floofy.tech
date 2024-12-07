@@ -4,8 +4,3 @@ patches_dir = "patches"
 mode = "patch"
 url = "https://patch-diff.githubusercontent.com/raw/glitch-soc/mastodon/pull/2462.patch"
 name = "0001-emoji-reactions.patch"
-
-[patches.redis-sentinel]
-mode = "diff"
-url = "https://patch-diff.githubusercontent.com/raw/mastodon/mastodon/pull/26571.diff"
-name = "0002-redis-sentinel.diff"
