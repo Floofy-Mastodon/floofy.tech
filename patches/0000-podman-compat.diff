@@ -13,9 +13,9 @@ index a5e3502..2ee04b8 100644
 -ARG TARGETPLATFORM=${TARGETPLATFORM}
 -ARG BUILDPLATFORM=${BUILDPLATFORM}
 -
- # Ruby image to use for base image, change with [--build-arg RUBY_VERSION="3.3.x"]
+ # Ruby image to use for base image, change with [--build-arg RUBY_VERSION="3.4.x"]
  # renovate: datasource=docker depName=docker.io/ruby
- ARG RUBY_VERSION="3.3.6"
+ ARG RUBY_VERSION="3.4.1"
 diff --git a/streaming/Dockerfile b/streaming/Dockerfile
 index bed6b63..6b3f872 100644
 --- a/streaming/Dockerfile

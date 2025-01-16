@@ -1,7 +1,7 @@
-From 21c303a4916d1898b5b101670efdcdc99785a3e7 Mon Sep 17 00:00:00 2001
+From d10574b3a223f1ebaa4de78d4032b9f45ae0d378 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 7 Nov 2023 18:43:47 -0600
-Subject: [PATCH 01/32] Add support for emoji reactions Squashed, modified, and
+Subject: [PATCH 01/35] Add support for emoji reactions Squashed, modified, and
  rebased from glitch-soc/mastodon#2221.
 
 Co-authored-by: fef <owo@fef.moe>
@@ -13,9 +13,8 @@ Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
  .env.production.sample                        |   3 +
  .../api/v1/statuses/reactions_controller.rb   |  31 ++++
  .../flavours/glitch/actions/interactions.js   |  82 ++++++++
- .../flavours/glitch/actions/notifications.js  |   1 +
- .../flavours/glitch/components/status.jsx     |  15 +-
- .../glitch/components/status_action_bar.jsx   |  31 +++-
+ .../flavours/glitch/components/status.jsx     |  17 +-
+ .../glitch/components/status_action_bar.jsx   |  30 ++-
  .../glitch/components/status_prepend.jsx      |  13 ++
  .../glitch/components/status_reactions.jsx    | 175 ++++++++++++++++++
  .../glitch/containers/status_container.js     |  10 +
@@ -28,7 +27,7 @@ Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
  .../flavours/glitch/locales/en.json           |   4 +
  .../flavours/glitch/reducers/settings.js      |   3 +
  .../flavours/glitch/reducers/statuses.js      |  50 +++++
- .../flavours/glitch/styles/components.scss    |  15 +-
+ .../flavours/glitch/styles/components.scss    |   9 +
  .../400-24px/add_reaction-fill.svg            |   1 +
  .../material-icons/400-24px/add_reaction.svg  |   1 +
  app/lib/activitypub/activity.rb               |  30 +++
@@ -65,7 +64,7 @@ Co-authored-by: Plastikmensch <plastikmensch@users.noreply.github.com>
  db/schema.rb                                  |  15 ++
  .../fabricators/status_reaction_fabricator.rb |   8 +
  spec/models/status_reaction_spec.rb           |   3 +
- 55 files changed, 1020 insertions(+), 11 deletions(-)
+ 54 files changed, 1014 insertions(+), 11 deletions(-)
  create mode 100644 app/controllers/api/v1/statuses/reactions_controller.rb
  create mode 100644 app/javascript/flavours/glitch/components/status_reactions.jsx
  create mode 100644 app/javascript/material-icons/400-24px/add_reaction-fill.svg
@@ -231,23 +230,11 @@ index 92142d782c1c90..725e29985d577b 100644
 +  id: statusId,
 +  name,
 +});
-diff --git a/app/javascript/flavours/glitch/actions/notifications.js b/app/javascript/flavours/glitch/actions/notifications.js
-index 7b80663f3ddb52..27a6d701915749 100644
---- a/app/javascript/flavours/glitch/actions/notifications.js
-+++ b/app/javascript/flavours/glitch/actions/notifications.js
-@@ -139,6 +139,7 @@ const excludeTypesFromFilter = filter => {
-     'follow',
-     'follow_request',
-     'favourite',
-+    'reaction',
-     'reblog',
-     'mention',
-     'poll',
 diff --git a/app/javascript/flavours/glitch/components/status.jsx b/app/javascript/flavours/glitch/components/status.jsx
-index 30ce6c49177efe..f7599a31c17b63 100644
+index b220460ef1f3ca..f91d512023f20b 100644
 --- a/app/javascript/flavours/glitch/components/status.jsx
 +++ b/app/javascript/flavours/glitch/components/status.jsx
-@@ -21,7 +21,7 @@ import Card from '../features/status/components/card';
+@@ -20,7 +20,7 @@ import Card from '../features/status/components/card';
  import Bundle from '../features/ui/components/bundle';
  import { MediaGallery, Video, Audio } from '../features/ui/util/async-components';
  import { SensitiveMediaContext } from '../features/ui/util/sensitive_media_context';
@@ -255,16 +242,16 @@ index 30ce6c49177efe..f7599a31c17b63 100644
 +import { displayMedia, visibleReactions } from '../initial_state';
  
  import AttachmentList from './attachment_list';
- import { CollapseButton } from './collapse_button';
-@@ -31,6 +31,7 @@ import StatusContent from './status_content';
- import StatusHeader from './status_header';
+ import { Avatar } from './avatar';
+@@ -33,6 +33,7 @@ import StatusActionBar from './status_action_bar';
+ import StatusContent from './status_content';
  import StatusIcons from './status_icons';
  import StatusPrepend from './status_prepend';
 +import StatusReactions from './status_reactions';
  
  const domParser = new DOMParser();
  
-@@ -91,6 +92,8 @@ class Status extends ImmutablePureComponent {
+@@ -93,6 +94,8 @@ class Status extends ImmutablePureComponent {
      onDelete: PropTypes.func,
      onDirect: PropTypes.func,
      onMention: PropTypes.func,
@@ -273,7 +260,16 @@ index 30ce6c49177efe..f7599a31c17b63 100644
      onPin: PropTypes.func,
      onOpenMedia: PropTypes.func,
      onOpenVideo: PropTypes.func,
-@@ -759,6 +762,7 @@ class Status extends ImmutablePureComponent {
+@@ -363,7 +366,7 @@ class Status extends ImmutablePureComponent {
+       this.props.onClick();
+       return;
+     }
+-    
++
+     const { history } = this.props;
+     const status = this.props.status;
+ 
+@@ -642,6 +645,7 @@ class Status extends ImmutablePureComponent {
      if (this.props.prepend && account) {
        const notifKind = {
          favourite: 'favourited',
@@ -281,9 +277,9 @@ index 30ce6c49177efe..f7599a31c17b63 100644
          reblog: 'boosted',
          reblogged_by: 'boosted',
          status: 'posted',
-@@ -844,6 +848,15 @@ class Status extends ImmutablePureComponent {
-               {...statusContentProps}
-             />
+@@ -730,6 +734,15 @@ class Status extends ImmutablePureComponent {
+             {/* This is a glitch-soc addition to have a placeholder */}
+             {!expanded && <MentionsPlaceholder status={status} />}
  
 +            <StatusReactions
 +              statusId={status.get('id')}
@@ -294,11 +290,11 @@ index 30ce6c49177efe..f7599a31c17b63 100644
 +              canReact={this.context.identity.signedIn}
 +            />
 +
-             {(!isCollapsed || !(muted || !settings.getIn(['collapsed', 'show_action_bar']))) && (
-               <StatusActionBar
-                 status={status}
+             <StatusActionBar
+               status={status}
+               account={status.get('account')}
 diff --git a/app/javascript/flavours/glitch/components/status_action_bar.jsx b/app/javascript/flavours/glitch/components/status_action_bar.jsx
-index d276affcef6636..b92ff325bd3b09 100644
+index 5b0da6aeaec566..d116b1d638e311 100644
 --- a/app/javascript/flavours/glitch/components/status_action_bar.jsx
 +++ b/app/javascript/flavours/glitch/components/status_action_bar.jsx
 @@ -8,6 +8,7 @@ import { withRouter } from 'react-router-dom';
@@ -324,10 +320,10 @@ index d276affcef6636..b92ff325bd3b09 100644
    cannot_reblog: { id: 'status.cannot_reblog', defaultMessage: 'This post cannot be boosted' },
    favourite: { id: 'status.favourite', defaultMessage: 'Favorite' },
 +  react: { id: 'status.react', defaultMessage: 'React' },
+   removeFavourite: { id: 'status.remove_favourite', defaultMessage: 'Remove from favorites' },
    bookmark: { id: 'status.bookmark', defaultMessage: 'Bookmark' },
-   open: { id: 'status.open', defaultMessage: 'Expand this status' },
-   report: { id: 'status.report', defaultMessage: 'Report @{name}' },
-@@ -73,6 +76,7 @@ class StatusActionBar extends ImmutablePureComponent {
+   removeBookmark: { id: 'status.remove_bookmark', defaultMessage: 'Remove bookmark' },
+@@ -75,6 +78,7 @@ class StatusActionBar extends ImmutablePureComponent {
      status: ImmutablePropTypes.map.isRequired,
      onReply: PropTypes.func,
      onFavourite: PropTypes.func,
@@ -335,7 +331,7 @@ index d276affcef6636..b92ff325bd3b09 100644
      onReblog: PropTypes.func,
      onDelete: PropTypes.func,
      onDirect: PropTypes.func,
-@@ -130,6 +134,10 @@ class StatusActionBar extends ImmutablePureComponent {
+@@ -132,6 +136,10 @@ class StatusActionBar extends ImmutablePureComponent {
      }
    };
  
@@ -346,7 +342,7 @@ index d276affcef6636..b92ff325bd3b09 100644
    handleReblogClick = e => {
      const { signedIn } = this.props.identity;
  
-@@ -205,6 +213,8 @@ class StatusActionBar extends ImmutablePureComponent {
+@@ -207,6 +215,8 @@ class StatusActionBar extends ImmutablePureComponent {
      this.props.onAddFilter(this.props.status);
    };
  
@@ -355,7 +351,7 @@ index d276affcef6636..b92ff325bd3b09 100644
    render () {
      const { status, intl, withDismiss, withCounters, showReplyCount, scrollKey } = this.props;
      const { permissions, signedIn } = this.props.identity;
-@@ -320,6 +330,18 @@ class StatusActionBar extends ImmutablePureComponent {
+@@ -322,6 +332,17 @@ class StatusActionBar extends ImmutablePureComponent {
        </div>
      );
  
@@ -370,13 +366,12 @@ index d276affcef6636..b92ff325bd3b09 100644
 +        iconComponent={AddReactionIcon}
 +      />
 +    );
-+
-     return (
-       <div className='status__action-bar'>
+     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
+     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
+ 
+@@ -344,6 +365,13 @@ class StatusActionBar extends ImmutablePureComponent {
          <div className='status__action-bar__button-wrapper'>
-@@ -339,6 +361,13 @@ class StatusActionBar extends ImmutablePureComponent {
-         <div className='status__action-bar__button-wrapper'>
-           <IconButton className='status__action-bar-button star-icon' animate active={status.get('favourited')} title={intl.formatMessage(messages.favourite)} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
+           <IconButton className='status__action-bar-button star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
          </div>
 +        <div className='status__action-bar__button-wrapper'>
 +          {
@@ -386,10 +381,10 @@ index d276affcef6636..b92ff325bd3b09 100644
 +          }
 +        </div>
          <div className='status__action-bar__button-wrapper'>
-           <IconButton className='status__action-bar-button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={intl.formatMessage(messages.bookmark)} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} />
+           <IconButton className='status__action-bar-button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} />
          </div>
 diff --git a/app/javascript/flavours/glitch/components/status_prepend.jsx b/app/javascript/flavours/glitch/components/status_prepend.jsx
-index b83767a9901eb3..fa54d42f6f52f3 100644
+index 7ed5416d38b55f..39ff771efd4215 100644
 --- a/app/javascript/flavours/glitch/components/status_prepend.jsx
 +++ b/app/javascript/flavours/glitch/components/status_prepend.jsx
 @@ -6,6 +6,7 @@ import { FormattedMessage } from 'react-intl';
@@ -400,7 +395,7 @@ index b83767a9901eb3..fa54d42f6f52f3 100644
  import EditIcon from '@/material-icons/400-24px/edit.svg?react';
  import HomeIcon from '@/material-icons/400-24px/home-fill.svg?react';
  import InsertChartIcon from '@/material-icons/400-24px/insert_chart.svg?react';
-@@ -70,6 +71,14 @@ export default class StatusPrepend extends PureComponent {
+@@ -65,6 +66,14 @@ export default class StatusPrepend extends PureComponent {
            values={{ name : link }}
          />
        );
@@ -415,7 +410,7 @@ index b83767a9901eb3..fa54d42f6f52f3 100644
      case 'reblog':
        return (
          <FormattedMessage
-@@ -125,6 +134,10 @@ export default class StatusPrepend extends PureComponent {
+@@ -120,6 +129,10 @@ export default class StatusPrepend extends PureComponent {
        iconId = 'star';
        iconComponent = StarIcon;
        break;
@@ -608,7 +603,7 @@ index 00000000000000..e3ae79958b4084
 +
 +}
 diff --git a/app/javascript/flavours/glitch/containers/status_container.js b/app/javascript/flavours/glitch/containers/status_container.js
-index 493a01da2390a0..011444c390028c 100644
+index d19cf6dd23f907..2ab6bcd02eb630 100644
 --- a/app/javascript/flavours/glitch/containers/status_container.js
 +++ b/app/javascript/flavours/glitch/containers/status_container.js
 @@ -16,6 +16,8 @@ import {
@@ -620,7 +615,7 @@ index 493a01da2390a0..011444c390028c 100644
  } from 'flavours/glitch/actions/interactions';
  import { openModal } from 'flavours/glitch/actions/modal';
  import { initMuteModal } from 'flavours/glitch/actions/mutes';
-@@ -106,6 +108,14 @@ const mapDispatchToProps = (dispatch, { contextType }) => ({
+@@ -107,6 +109,14 @@ const mapDispatchToProps = (dispatch, { contextType }) => ({
      }
    },
  
@@ -657,10 +652,10 @@ index c556f1536689f3..a26d3e3888decf 100644
          this.onHideDropdown();
        } else {
 diff --git a/app/javascript/flavours/glitch/features/notifications/components/notification.jsx b/app/javascript/flavours/glitch/features/notifications/components/notification.jsx
-index cba2e87d2f5e32..f2f6ae5fa13510 100644
+index 6ec613e2094b79..bfa994bf9f40ff 100644
 --- a/app/javascript/flavours/glitch/features/notifications/components/notification.jsx
 +++ b/app/javascript/flavours/glitch/features/notifications/components/notification.jsx
-@@ -207,6 +207,31 @@ class Notification extends ImmutablePureComponent {
+@@ -204,6 +204,31 @@ class Notification extends ImmutablePureComponent {
      );
    }
  
@@ -692,7 +687,7 @@ index cba2e87d2f5e32..f2f6ae5fa13510 100644
    renderReblog (notification) {
      return (
        <StatusContainer
-@@ -438,6 +463,8 @@ class Notification extends ImmutablePureComponent {
+@@ -433,6 +458,8 @@ class Notification extends ImmutablePureComponent {
        return this.renderMention(notification);
      case 'favourite':
        return this.renderFavourite(notification);
@@ -702,7 +697,7 @@ index cba2e87d2f5e32..f2f6ae5fa13510 100644
        return this.renderReblog(notification);
      case 'status':
 diff --git a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-index bf676973bc3dd8..b1131625c8da10 100644
+index e598a3d0587b40..ec6f06c633905d 100644
 --- a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 @@ -7,6 +7,7 @@ import classNames from 'classnames';
@@ -728,10 +723,10 @@ index bf676973bc3dd8..b1131625c8da10 100644
    cannot_reblog: { id: 'status.cannot_reblog', defaultMessage: 'This post cannot be boosted' },
    favourite: { id: 'status.favourite', defaultMessage: 'Favorite' },
 +  react: { id: 'status.react', defaultMessage: 'React' },
+   removeFavourite: { id: 'status.remove_favourite', defaultMessage: 'Remove from favorites' },
    bookmark: { id: 'status.bookmark', defaultMessage: 'Bookmark' },
-   more: { id: 'status.more', defaultMessage: 'More' },
-   mute: { id: 'status.mute', defaultMessage: 'Mute @{name}' },
-@@ -64,6 +67,7 @@ class ActionBar extends PureComponent {
+   removeBookmark: { id: 'status.remove_bookmark', defaultMessage: 'Remove bookmark' },
+@@ -66,6 +69,7 @@ class ActionBar extends PureComponent {
      onReply: PropTypes.func.isRequired,
      onReblog: PropTypes.func.isRequired,
      onFavourite: PropTypes.func.isRequired,
@@ -739,7 +734,7 @@ index bf676973bc3dd8..b1131625c8da10 100644
      onBookmark: PropTypes.func.isRequired,
      onDelete: PropTypes.func.isRequired,
      onEdit: PropTypes.func.isRequired,
-@@ -90,6 +94,10 @@ class ActionBar extends PureComponent {
+@@ -92,6 +96,10 @@ class ActionBar extends PureComponent {
      this.props.onFavourite(this.props.status, e);
    };
  
@@ -750,7 +745,7 @@ index bf676973bc3dd8..b1131625c8da10 100644
    handleBookmarkClick = (e) => {
      this.props.onBookmark(this.props.status, e);
    };
-@@ -149,6 +157,8 @@ class ActionBar extends PureComponent {
+@@ -151,6 +159,8 @@ class ActionBar extends PureComponent {
      navigator.clipboard.writeText(url);
    };
  
@@ -759,7 +754,7 @@ index bf676973bc3dd8..b1131625c8da10 100644
    render () {
      const { status, intl } = this.props;
      const { signedIn, permissions } = this.props.identity;
-@@ -225,6 +235,18 @@ class ActionBar extends PureComponent {
+@@ -227,6 +237,18 @@ class ActionBar extends PureComponent {
        replyIconComponent = ReplyAllIcon;
      }
  
@@ -778,10 +773,10 @@ index bf676973bc3dd8..b1131625c8da10 100644
      const reblogPrivate = status.getIn(['account', 'id']) === me && status.get('visibility') === 'private';
  
      let reblogTitle, reblogIconComponent;
-@@ -248,6 +270,13 @@ class ActionBar extends PureComponent {
+@@ -253,6 +275,13 @@ class ActionBar extends PureComponent {
          <div className='detailed-status__button'><IconButton title={intl.formatMessage(messages.reply)} icon={replyIcon} iconComponent={replyIconComponent} onClick={this.handleReplyClick} /></div>
          <div className='detailed-status__button'><IconButton className={classNames({ reblogPrivate })} disabled={!publicStatus && !reblogPrivate} active={status.get('reblogged')} title={reblogTitle} icon='retweet' iconComponent={reblogIconComponent} onClick={this.handleReblogClick} /></div>
-         <div className='detailed-status__button'><IconButton className='star-icon' animate active={status.get('favourited')} title={intl.formatMessage(messages.favourite)} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} /></div>
+         <div className='detailed-status__button'><IconButton className='star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} /></div>
 +        <div className='detailed-status__button'>
 +          {
 +            signedIn
@@ -789,17 +784,17 @@ index bf676973bc3dd8..b1131625c8da10 100644
 +              : reactButton
 +          }
 +        </div>
-         <div className='detailed-status__button'><IconButton className='bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={intl.formatMessage(messages.bookmark)} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} /></div>
+         <div className='detailed-status__button'><IconButton className='bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} /></div>
  
          <div className='detailed-status__action-bar-dropdown'>
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
-index c6f0900c5fe2bf..abf469295dd142 100644
+index 4099ec5a82352e..88b3c0962160bc 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
-@@ -22,12 +22,14 @@ import PictureInPicturePlaceholder from 'flavours/glitch/components/picture_in_p
- import { useAppHistory } from 'flavours/glitch/components/router';
+@@ -22,12 +22,14 @@ import { MentionsPlaceholder } from 'flavours/glitch/components/mentions_placeho
+ import { Permalink } from 'flavours/glitch/components/permalink';
+ import PictureInPicturePlaceholder from 'flavours/glitch/components/picture_in_picture_placeholder';
  import { VisibilityIcon } from 'flavours/glitch/components/visibility_icon';
- import PollContainer from 'flavours/glitch/containers/poll_container';
 +import { useIdentity } from 'flavours/glitch/identity_context';
  import { useAppSelector } from 'flavours/glitch/store';
  
@@ -820,7 +815,7 @@ index c6f0900c5fe2bf..abf469295dd142 100644
    expanded: boolean;
  }> = ({
    status,
-@@ -70,12 +74,15 @@ export const DetailedStatus: React.FC<{
+@@ -70,11 +74,14 @@ export const DetailedStatus: React.FC<{
    pictureInPicture,
    onToggleMediaVisibility,
    onToggleHidden,
@@ -831,14 +826,13 @@ index c6f0900c5fe2bf..abf469295dd142 100644
    const properStatus = status?.get('reblog') ?? status;
    const [height, setHeight] = useState(0);
    const nodeRef = useRef<HTMLDivElement>();
-   const history = useAppHistory();
 +  const { signedIn } = useIdentity();
  
    const rewriteMentions = useAppSelector(
      (state) => state.local_settings.get('rewrite_mentions', false) as boolean,
-@@ -410,6 +417,14 @@ export const DetailedStatus: React.FC<{
-           {...(statusContentProps as any)}
-         />
+@@ -383,6 +390,14 @@ export const DetailedStatus: React.FC<{
+         {/* This is a glitch-soc addition to have a placeholder */}
+         {!expanded && <MentionsPlaceholder status={status} />}
  
 +        <StatusReactions
 +          statusId={status.get('id')}
@@ -852,7 +846,7 @@ index c6f0900c5fe2bf..abf469295dd142 100644
            <div className='detailed-status__meta__line'>
              <a
 diff --git a/app/javascript/flavours/glitch/features/status/index.jsx b/app/javascript/flavours/glitch/features/status/index.jsx
-index e977f02b7fc5d2..e2da0c302ff59d 100644
+index 0247b67f818aca..91507497336cfa 100644
 --- a/app/javascript/flavours/glitch/features/status/index.jsx
 +++ b/app/javascript/flavours/glitch/features/status/index.jsx
 @@ -39,6 +39,8 @@ import {
@@ -884,7 +878,7 @@ index e977f02b7fc5d2..e2da0c302ff59d 100644
    handlePin = (status) => {
      if (status.get('pinned')) {
        this.props.dispatch(unpin(status));
-@@ -705,6 +720,8 @@ class Status extends ImmutablePureComponent {
+@@ -710,6 +725,8 @@ class Status extends ImmutablePureComponent {
                    settings={settings}
                    onOpenVideo={this.handleOpenVideo}
                    onOpenMedia={this.handleOpenMedia}
@@ -893,7 +887,7 @@ index e977f02b7fc5d2..e2da0c302ff59d 100644
                    expanded={isExpanded}
                    onToggleHidden={this.handleToggleHidden}
                    onTranslate={this.handleTranslate}
-@@ -719,6 +736,7 @@ class Status extends ImmutablePureComponent {
+@@ -724,6 +741,7 @@ class Status extends ImmutablePureComponent {
                    status={status}
                    onReply={this.handleReplyClick}
                    onFavourite={this.handleFavouriteClick}
@@ -902,7 +896,7 @@ index e977f02b7fc5d2..e2da0c302ff59d 100644
                    onBookmark={this.handleBookmarkClick}
                    onDelete={this.handleDeleteClick}
 diff --git a/app/javascript/flavours/glitch/initial_state.js b/app/javascript/flavours/glitch/initial_state.js
-index fd31b54e79cc9c..ef6e5d035fd739 100644
+index 7fb25697ae0925..e62b1db93ff0f9 100644
 --- a/app/javascript/flavours/glitch/initial_state.js
 +++ b/app/javascript/flavours/glitch/initial_state.js
 @@ -25,6 +25,7 @@
@@ -920,8 +914,8 @@ index fd31b54e79cc9c..ef6e5d035fd739 100644
 + * @property {number} visible_reactions
   * @property {string} sso_redirect
   * @property {string} status_page_url
-  * @property {boolean} system_emoji_font
-@@ -70,6 +72,7 @@
+  * @property {boolean} terms_of_service_enabled
+@@ -71,6 +73,7 @@
   * @property {object} local_settings
   * @property {number} max_feed_hashtags
   * @property {number} poll_limits
@@ -929,7 +923,7 @@ index fd31b54e79cc9c..ef6e5d035fd739 100644
   */
  
  const element = document.getElementById('initial-state');
-@@ -115,6 +118,7 @@ export const expandSpoilers = getMeta('expand_spoilers');
+@@ -116,6 +119,7 @@ export const expandSpoilers = getMeta('expand_spoilers');
  export const forceSingleColumn = !getMeta('advanced_layout');
  export const limitedFederationMode = getMeta('limited_federation_mode');
  export const mascot = getMeta('mascot');
@@ -937,40 +931,35 @@ index fd31b54e79cc9c..ef6e5d035fd739 100644
  export const me = getMeta('me');
  export const movedToAccountId = getMeta('moved_to_account_id');
  export const owner = getMeta('owner');
-@@ -133,6 +137,7 @@ export const trendsAsLanding = getMeta('trends_as_landing_page');
+@@ -134,6 +138,7 @@ export const trendsAsLanding = getMeta('trends_as_landing_page');
  export const useBlurhash = getMeta('use_blurhash');
  export const usePendingItems = getMeta('use_pending_items');
  export const version = getMeta('version');
 +export const visibleReactions = getMeta('visible_reactions');
- export const languages = initialState?.languages;
  export const criticalUpdatesPending = initialState?.critical_updates_pending;
  export const statusPageUrl = getMeta('status_page_url');
+ export const sso_redirect = getMeta('sso_redirect');
 diff --git a/app/javascript/flavours/glitch/locales/en.json b/app/javascript/flavours/glitch/locales/en.json
-index ca2b0d894eb71a..84766d65e3a5a9 100644
+index 567bd724596df0..d35781603cca4d 100644
 --- a/app/javascript/flavours/glitch/locales/en.json
 +++ b/app/javascript/flavours/glitch/locales/en.json
-@@ -53,11 +53,14 @@
+@@ -51,7 +51,10 @@
+   "navigation_bar.app_settings": "App settings",
    "navigation_bar.keyboard_shortcuts": "Keyboard shortcuts",
    "navigation_bar.misc": "Misc",
-   "notification.markForDeletion": "Mark for deletion",
 +  "notification.reaction": "{name} reacted to your post",
-   "notification_purge.btn_all": "Select\nall",
-   "notification_purge.btn_apply": "Clear\nselected",
-   "notification_purge.btn_invert": "Invert\nselection",
-   "notification_purge.btn_none": "Select\nnone",
    "notifications.column_settings.filter_bar.show_bar": "Show filter bar",
 +  "notifications.column_settings.reaction": "Reactions:",
 +  "notifications.filter.reactions": "Reactions",
-   "notifications.marked_clear": "Clear selected notifications",
-   "notifications.marked_clear_confirmation": "Are you sure you want to permanently clear all selected notifications?",
    "settings.always_show_spoilers_field": "Always enable the Content Warning field",
-@@ -150,6 +153,7 @@
+   "settings.close": "Close",
+   "settings.compose_box_opts": "Compose box",
+@@ -123,5 +126,6 @@
    "status.in_reply_to": "This toot is a reply",
    "status.is_poll": "This toot is a poll",
    "status.local_only": "Only visible from your instance",
 +  "status.react": "React",
-   "status.show_filter_reason": "Show anyway",
-   "status.uncollapse": "Uncollapse"
+   "status.show_filter_reason": "Show anyway"
  }
 diff --git a/app/javascript/flavours/glitch/reducers/settings.js b/app/javascript/flavours/glitch/reducers/settings.js
 index bfea4abe44b9b0..a5f97aa282c81a 100644
@@ -1076,31 +1065,18 @@ index 39df0e956d2b68..ca7e98aa487dde 100644
      return state.setIn([action.id, 'muted'], true);
    case STATUS_UNMUTE_SUCCESS:
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 44f28186b0f9df..faf9c55e042144 100644
+index 2d65c2f9e964ae..3dad4a5bbcff71 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -1494,7 +1494,8 @@ body > [data-popper-placement] {
-     border-bottom: 0;
+@@ -1494,6 +1494,7 @@ body > [data-popper-placement] {
  
      .status__content,
--    .status__action-bar {
-+    .status__action-bar,
-+    .reactions-bar {
-       margin-inline-start: $thread-margin;
-       width: calc(100% - $thread-margin);
-     }
-@@ -1608,6 +1609,10 @@ body > [data-popper-placement] {
-     width: 24px;
-     height: 24px;
-   }
-+
-+  .reactions-bar--empty {
-+    display: none;
-+  }
- }
- 
- .status__relative-time {
-@@ -1851,6 +1856,10 @@ body > [data-popper-placement] {
+     .status__action-bar,
++    .reactions-bar,
+     .media-gallery,
+     .video-player,
+     .audio-player,
+@@ -1732,6 +1733,10 @@ body > [data-popper-placement] {
    &-spacer {
      flex-grow: 1;
    }
@@ -1111,7 +1087,7 @@ index 44f28186b0f9df..faf9c55e042144 100644
  }
  
  .detailed-status__action-bar-dropdown {
-@@ -4964,6 +4973,10 @@ a.status-card {
+@@ -4833,6 +4838,10 @@ a.status-card {
    text-align: center;
  }
  
@@ -1333,10 +1309,10 @@ index 6e2dc9126cf3df..c5894e08066ee6 100644
      status.proper.bookmarks.exists?(account: self)
    end
 diff --git a/app/models/concerns/user/has_settings.rb b/app/models/concerns/user/has_settings.rb
-index b79726e38aedf6..f3125f23f5db33 100644
+index 99ad25c276c4a5..54be826e0829f3 100644
 --- a/app/models/concerns/user/has_settings.rb
 +++ b/app/models/concerns/user/has_settings.rb
-@@ -123,6 +123,10 @@ def setting_hide_followers_count
+@@ -127,6 +127,10 @@ def setting_hide_followers_count
      settings['hide_followers_count']
    end
  
@@ -1347,7 +1323,7 @@ index b79726e38aedf6..f3125f23f5db33 100644
    def allows_report_emails?
      settings['notification_emails.report']
    end
-@@ -166,4 +170,14 @@ def show_all_media?
+@@ -170,4 +174,14 @@ def show_all_media?
    def hide_all_media?
      settings['web.display_media'] == 'hide_all'
    end
@@ -1501,7 +1477,7 @@ index 00000000000000..bc6eda2a1cc0f8
 +  end
 +end
 diff --git a/app/models/user_settings.rb b/app/models/user_settings.rb
-index 3b245a4e461941..71bda27e12dac0 100644
+index 147a6f8a8396ea..8353af748c5b9f 100644
 --- a/app/models/user_settings.rb
 +++ b/app/models/user_settings.rb
 @@ -18,6 +18,7 @@ class KeyError < Error; end
@@ -1598,7 +1574,7 @@ index 00000000000000..49f0c1c8fd2603
 +  end
 +end
 diff --git a/app/serializers/initial_state_serializer.rb b/app/serializers/initial_state_serializer.rb
-index 5bbb0fe4b4e503..b5b2d043f48476 100644
+index dee9e5ab0e5a1b..dfc1e5d399a28f 100644
 --- a/app/serializers/initial_state_serializer.rb
 +++ b/app/serializers/initial_state_serializer.rb
 @@ -6,13 +6,17 @@ class InitialStateSerializer < ActiveModel::Serializer
@@ -1639,7 +1615,7 @@ index 5bbb0fe4b4e503..b5b2d043f48476 100644
      else
        store[:auto_play_gif] = Setting.auto_play_gif
        store[:display_media] = Setting.display_media
-@@ -129,6 +134,10 @@ def default_meta_store
+@@ -130,6 +135,10 @@ def default_meta_store
      }
    end
  
@@ -1651,10 +1627,10 @@ index 5bbb0fe4b4e503..b5b2d043f48476 100644
      object.current_account.user
    end
 diff --git a/app/serializers/rest/instance_serializer.rb b/app/serializers/rest/instance_serializer.rb
-index 96eb928b4cd7f8..1afbc3e2e7b3c2 100644
+index 3c88c4e1274c56..98597f826ca4fb 100644
 --- a/app/serializers/rest/instance_serializer.rb
 +++ b/app/serializers/rest/instance_serializer.rb
-@@ -96,6 +96,10 @@ def configuration
+@@ -97,6 +97,10 @@ def configuration
        translation: {
          enabled: TranslationService.configured?,
        },
@@ -1847,12 +1823,12 @@ index 00000000000000..046476de9d69e2
 +  end
 +end
 diff --git a/app/views/settings/preferences/appearance/show.html.haml b/app/views/settings/preferences/appearance/show.html.haml
-index 73a8b9015848da..95e71ff3816371 100644
+index cf9b047095a54a..58fdd88000ae31 100644
 --- a/app/views/settings/preferences/appearance/show.html.haml
 +++ b/app/views/settings/preferences/appearance/show.html.haml
-@@ -53,6 +53,9 @@
-       = ff.input :'web.use_system_font', wrapper: :with_label, label: I18n.t('simple_form.labels.defaults.setting_system_font_ui')
+@@ -54,6 +54,9 @@
        = ff.input :'web.use_system_emoji_font', wrapper: :with_label, label: I18n.t('simple_form.labels.defaults.setting_system_emoji_font'), glitch_only: true
+       = ff.input :'web.use_system_scrollbars', wrapper: :with_label, hint: I18n.t('simple_form.hints.defaults.setting_system_scrollbars_ui'), label: I18n.t('simple_form.labels.defaults.setting_system_scrollbars_ui')
  
 +    .fields-group.fields-row__column.fields-row__column-6
 +      = ff.input :'visible_reactions', wrapper: :with_label, label: I18n.t('simple_form.labels.defaults.setting_visible_reactions'), input_html: { type: 'number', min: '0', data: { default: '6' } }, hint: false
@@ -1905,7 +1881,7 @@ index 9e943133bd9893..9de3f945ce9f60 100644
          trending_link: New trending link requires review
          trending_status: New trending post requires review
 diff --git a/config/routes/api.rb b/config/routes/api.rb
-index 076d0e421d8ee4..236bfcfa272791 100644
+index 9b448ae2259f11..6af573039ad6bf 100644
 --- a/config/routes/api.rb
 +++ b/config/routes/api.rb
 @@ -16,6 +16,11 @@
@@ -1921,7 +1897,7 @@ index 076d0e421d8ee4..236bfcfa272791 100644
          post :unbookmark, to: 'bookmarks#destroy'
  
 diff --git a/config/settings.yml b/config/settings.yml
-index ee8f038e149272..b560f8ab248335 100644
+index 2b38b38edd5a6e..705ac89f996fad 100644
 --- a/config/settings.yml
 +++ b/config/settings.yml
 @@ -22,6 +22,7 @@ defaults: &defaults
@@ -2010,10 +1986,10 @@ index 00000000000000..420772b6923f1a
 +  end
 +end
 diff --git a/db/schema.rb b/db/schema.rb
-index 18b175b9ab6cce..3533db53a2db8b 100644
+index f407a316133129..23b30287cf311c 100644
 --- a/db/schema.rb
 +++ b/db/schema.rb
-@@ -1009,6 +1009,18 @@
+@@ -1007,6 +1007,18 @@
      t.index ["status_id"], name: "index_status_pins_on_status_id"
    end
  
@@ -2032,7 +2008,7 @@ index 18b175b9ab6cce..3533db53a2db8b 100644
    create_table "status_stats", force: :cascade do |t|
      t.bigint "status_id", null: false
      t.bigint "replies_count", default: 0, null: false
-@@ -1335,6 +1347,9 @@
+@@ -1351,6 +1363,9 @@
    add_foreign_key "status_edits", "statuses", on_delete: :cascade
    add_foreign_key "status_pins", "accounts", name: "fk_d4cb435b62", on_delete: :cascade
    add_foreign_key "status_pins", "statuses", on_delete: :cascade
@@ -2066,10 +2042,10 @@ index 00000000000000..ccfa9ee8d88825
 +
 +require 'rails_helper'
 
-From bd62370322b7702cb6ffc7c10435e31a3141df97 Mon Sep 17 00:00:00 2001
+From ecca25fb060d7cc364da13d71804dc4d7cb904af Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 10 Nov 2023 15:16:29 -0600
-Subject: [PATCH 02/32] Add notification emails for reactions
+Subject: [PATCH 02/35] Add notification emails for reactions
 
 ---
  app/javascript/images/mailer/icon_add.png     | Bin 0 -> 1417 bytes
@@ -2139,10 +2115,10 @@ index a20992dcb56f19..1a3ffceccd056e 100644
      return if @status.blank?
  
 diff --git a/app/models/user_settings.rb b/app/models/user_settings.rb
-index 71bda27e12dac0..7d6c927bc96721 100644
+index 8353af748c5b9f..1ec50e3a69a7c3 100644
 --- a/app/models/user_settings.rb
 +++ b/app/models/user_settings.rb
-@@ -45,6 +45,7 @@ class KeyError < Error; end
+@@ -46,6 +46,7 @@ class KeyError < Error; end
      setting :follow, default: true
      setting :reblog, default: false
      setting :favourite, default: false
@@ -2237,10 +2213,10 @@ index 9de3f945ce9f60..a9361bf192a397 100644
          trending_status: New trending post requires review
          trending_tag: New trending tag requires review
 
-From b7658532932958d4149f9575fd960bf858bb8527 Mon Sep 17 00:00:00 2001
+From 1b39544275745ae20f598c27fae4ecab5ef78bbd Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 10 Nov 2023 17:36:40 -0600
-Subject: [PATCH 03/32] Fix reblog reactions
+Subject: [PATCH 03/35] Fix reblog reactions
 
 ---
  app/models/status_reaction.rb | 4 ++++
@@ -2262,10 +2238,10 @@ index bc6eda2a1cc0f8..2fdb3da0ac62eb 100644
  
    private
 
-From 1372ad694e4c0621eaa56ff9beb1df52a4fd965a Mon Sep 17 00:00:00 2001
+From bec1bf1c28fe92f02f9b09e20a53148488ba2f6e Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 12 Nov 2023 20:59:36 -0600
-Subject: [PATCH 04/32] Refactor react services
+Subject: [PATCH 04/35] Refactor react services
 
 ---
  app/services/react_service.rb   | 27 +++++++++++++++++++++------
@@ -2345,10 +2321,10 @@ index 7c1b32e94f1adc..49d232e931418f 100644
    end
  end
 
-From d10824314fae0ae58fd8eaf147aa52c870f7d4d0 Mon Sep 17 00:00:00 2001
+From 2527a6b82a3ca6204087e9c99fff790e6638350a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Mon, 18 Dec 2023 18:27:02 -0600
-Subject: [PATCH 05/32] Linting fixes
+Subject: [PATCH 05/35] Linting fixes
 
 ---
  .../flavours/glitch/components/status_reactions.jsx         | 6 +++---
@@ -2390,11 +2366,11 @@ index 32b6823f3094cb..bcb41b69b1f656 100644
      end
  
 diff --git a/app/views/settings/preferences/appearance/show.html.haml b/app/views/settings/preferences/appearance/show.html.haml
-index 95e71ff3816371..36aa5270add7b1 100644
+index 58fdd88000ae31..4d8ba2fae2075c 100644
 --- a/app/views/settings/preferences/appearance/show.html.haml
 +++ b/app/views/settings/preferences/appearance/show.html.haml
-@@ -54,7 +54,7 @@
-       = ff.input :'web.use_system_emoji_font', wrapper: :with_label, label: I18n.t('simple_form.labels.defaults.setting_system_emoji_font'), glitch_only: true
+@@ -55,7 +55,7 @@
+       = ff.input :'web.use_system_scrollbars', wrapper: :with_label, hint: I18n.t('simple_form.hints.defaults.setting_system_scrollbars_ui'), label: I18n.t('simple_form.labels.defaults.setting_system_scrollbars_ui')
  
      .fields-group.fields-row__column.fields-row__column-6
 -      = ff.input :'visible_reactions', wrapper: :with_label, label: I18n.t('simple_form.labels.defaults.setting_visible_reactions'), input_html: { type: 'number', min: '0', data: { default: '6' } }, hint: false
@@ -2403,10 +2379,10 @@ index 95e71ff3816371..36aa5270add7b1 100644
      %h4= t 'appearance.discovery'
  
 
-From da105e5850990ecb419eed03d01655202339927d Mon Sep 17 00:00:00 2001
+From 219ca08efece374274413f7e418dcd62f951adb7 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 19 Dec 2023 22:15:34 -0600
-Subject: [PATCH 06/32] Add reaction notification column settings This was in a
+Subject: [PATCH 06/35] Add reaction notification column settings This was in a
  previous PR. Not quite sure how it didn't carry over.
 
 ---
@@ -2445,10 +2421,10 @@ index 81a9d9e1d1f4ed..0377def8219ea4 100644
            <h3 id='notifications-mention'><FormattedMessage id='notifications.column_settings.mention' defaultMessage='Mentions:' /></h3>
  
 
-From a2644c2d2b77c7f1848952e75b4717b5eb43acf2 Mon Sep 17 00:00:00 2001
+From 736e990771c594f0f9c55823dfda67010b7bd571 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 22 Dec 2023 16:09:43 -0600
-Subject: [PATCH 07/32] Fix rubocop complaint
+Subject: [PATCH 07/35] Fix rubocop complaint
 
 ---
  db/migrate/20230215074425_move_emoji_reaction_settings.rb | 2 +-
@@ -2468,10 +2444,10 @@ index 420772b6923f1a..6d2d5e167ad9ca 100644
      end
    end
 
-From 55cf1ae40bcfd9518631c67fb5d0438ed83598cb Mon Sep 17 00:00:00 2001
+From 060313ee723e80b617d875d6dec502d880592ca8 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 26 Dec 2023 14:04:53 -0600
-Subject: [PATCH 08/32] Check for content attribute in Misskey likes
+Subject: [PATCH 08/35] Check for content attribute in Misskey likes
 
 ---
  app/lib/activitypub/activity/like.rb | 7 ++++---
@@ -2512,10 +2488,10 @@ index 5efcfdc99f2d49..5f9f1bbecbfaf1 100644
      else
        delete_later!(object_uri)
 
-From bb01f80cf9b3556a214da7fd033b58ee575106ae Mon Sep 17 00:00:00 2001
+From 72a43df639934b87ba183e72f620a5850ab8c384 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 13 Jan 2024 18:16:57 -0600
-Subject: [PATCH 09/32] Normalize emojis with variant selectors
+Subject: [PATCH 09/35] Normalize emojis with variant selectors
 
 ---
  app/services/react_service.rb | 3 +++
@@ -2536,10 +2512,10 @@ index cfc3f99a78041f..be19bd850179ed 100644
      reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
      return reaction unless reaction.nil?
 
-From 73a0da4147da4945b19901a34043bb4b2e726220 Mon Sep 17 00:00:00 2001
+From 7283e84fa585c48d66e78816fd1ae97d12a95b76 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 13 Jan 2024 18:18:36 -0600
-Subject: [PATCH 10/32] Make name of like content parser function more general
+Subject: [PATCH 10/35] Make name of like content parser function more general
 
 ---
  app/lib/activitypub/activity/like.rb | 8 ++++----
@@ -2573,20 +2549,20 @@ index f6c8769fee4cae..006382082549a4 100644
      name = @json['content'] || @json['_misskey_reaction']
      return false if name.nil?
 
-From 99a88c606d2a6a734ff1bcfe53bc6f073b4bf74c Mon Sep 17 00:00:00 2001
+From 38f1223f040f82af459af7b3dca097aaad37f66f Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 14 Jan 2024 15:47:55 -0600
-Subject: [PATCH 11/32] Quick fixes
+Subject: [PATCH 11/35] Quick fixes
 
 ---
  .../flavours/glitch/features/status/components/action_bar.jsx   | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-index b1131625c8da10..ef8805b714c969 100644
+index ec6f06c633905d..3065e85b44ae4c 100644
 --- a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-@@ -238,7 +238,7 @@ class ActionBar extends PureComponent {
+@@ -240,7 +240,7 @@ class ActionBar extends PureComponent {
      const canReact = signedIn && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
      const reactButton = (
        <IconButton
@@ -2596,10 +2572,10 @@ index b1131625c8da10..ef8805b714c969 100644
          title={intl.formatMessage(messages.react)}
          disabled={!canReact}
 
-From 1d8225ce242c654333fc54438bd3413acc6cb5de Mon Sep 17 00:00:00 2001
+From f3fff3112ee01684c775e513cc270eebd786aae3 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 14 Jan 2024 15:59:27 -0600
-Subject: [PATCH 12/32] Move reaction normalization to API controller
+Subject: [PATCH 12/35] Move reaction normalization to API controller
 
 ---
  .../api/v1/statuses/reactions_controller.rb           | 11 +++++++++--
@@ -2654,10 +2630,10 @@ index be19bd850179ed..cfc3f99a78041f 100644
      reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
      return reaction unless reaction.nil?
 
-From b4f9230becae8061405e3d9da0972dba892facb8 Mon Sep 17 00:00:00 2001
+From ba1e6a8ad07cac99dd09e17055f15fc695236e35 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 17 Jan 2024 18:04:11 -0600
-Subject: [PATCH 13/32] Revert variant selector normalization
+Subject: [PATCH 13/35] Revert variant selector normalization
 
 Probably worth tackling later, but for now it's not worth worrying about; some other implementations (e.g. Misskey's) look to have the same behavior anyways.
 ---
@@ -2698,10 +2674,10 @@ index 1d8382f8331332..2d7e4f59846220 100644
      @status = Status.find(params[:status_id])
      authorize @status, :show?
 
-From 7e97e91767c108eedbce3decd25ddb5e9a69e7f0 Mon Sep 17 00:00:00 2001
+From aa2e80cfae0d2c55feb84a6a2f62cbf8e2c38112 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 18 Jan 2024 21:38:39 -0600
-Subject: [PATCH 14/32] Update reaction emails
+Subject: [PATCH 14/35] Update reaction emails
 
 Reaction icon made by t3rminus@calamity.world
 ---
@@ -2816,10 +2792,10 @@ index 83ae41927d3f99..32427d58e5177f 100644
 +                %td.email-padding-top-24
 +                  = render 'application/mailer/button', text: t('application_mailer.view_status'), url: web_url("@#{@status.account.pretty_acct}/#{@status.id}")
 
-From 57a471720843c12cbeed57bcba256efd710f183d Mon Sep 17 00:00:00 2001
+From 0126d496ddcc641e16cb20eacc11bf86c55b3040 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 23 Jan 2024 22:59:42 -0600
-Subject: [PATCH 15/32] Simplify reactions API controller
+Subject: [PATCH 15/35] Simplify reactions API controller
 
 ---
  .../api/v1/statuses/reactions_controller.rb        | 14 +-------------
@@ -2857,10 +2833,10 @@ index 2d7e4f59846220..c4b0fa307f419a 100644
 -  end
  end
 
-From f965e0d2d59f60e9f73e6e43afd530b19185c8fc Mon Sep 17 00:00:00 2001
+From 11346711caf3c307faa5e61931425ed932831b2f Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jan 2024 17:50:58 -0600
-Subject: [PATCH 16/32] Refactor status reactions query
+Subject: [PATCH 16/35] Refactor status reactions query
 
 This was done to announcement reactions in 1b0cb3b54d1a1b08922527aefc8135d56d3a1a8d. Might as well do it here too.
 ---
@@ -2934,10 +2910,10 @@ index bcb41b69b1f656..c69f28f49212af 100644
      return if marked_for_destruction? || destroyed?
  
 
-From 76d78f5b12dce0b805fe7a69f03f5926f446ce2b Mon Sep 17 00:00:00 2001
+From 6b2dad2ac67cab492c41341b1a7c6e3160f93ed0 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 28 Jan 2024 14:51:10 -0600
-Subject: [PATCH 17/32] Fix rubocop lint issue
+Subject: [PATCH 17/35] Fix rubocop lint issue
 
 ---
  app/models/concerns/account/interactions.rb | 2 +-
@@ -2957,10 +2933,10 @@ index c5894e08066ee6..4bc58859fe9a61 100644
  
    def bookmarked?(status)
 
-From 7b2038405f5590f191fa252547470dc14e407a2a Mon Sep 17 00:00:00 2001
+From 2672e1fd5620bb1113c42f5ad906faebc64b30dd Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 7 Feb 2024 17:14:16 -0600
-Subject: [PATCH 18/32] Purge status reactions on account delete
+Subject: [PATCH 18/35] Purge status reactions on account delete
 
 ---
  app/services/delete_account_service.rb | 10 ++++++++++
@@ -2995,10 +2971,10 @@ index 7d06302af5ae88..2399ab9886b25d 100644
      @account.bookmarks.in_batches do |bookmarks|
        Chewy.strategy.current.update(StatusesIndex, bookmarks.pluck(:status_id)) if Chewy.enabled?
 
-From cb2bc5a09a54f876bbdec6af0c42bf290ffb3783 Mon Sep 17 00:00:00 2001
+From 3bbf8233fe78bcb073bdfb0ab39c718f118ad13e Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 9 Feb 2024 17:42:19 -0600
-Subject: [PATCH 19/32] Hydrate reactions on streaming API
+Subject: [PATCH 19/35] Hydrate reactions on streaming API
 
 ---
  app/lib/status_cache_hydrator.rb          | 13 +++++++++++++
@@ -3101,10 +3077,10 @@ index 26aa19c1d02fe1..a23ea56dbcdd43 100644
  
    private
 
-From 7d896c2391ed4230fc2fbe3889c58fad4bb71457 Mon Sep 17 00:00:00 2001
+From cde3701cc6663d0dbad20fc53c632a07092c855e Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 24 Feb 2024 16:22:40 -0600
-Subject: [PATCH 20/32] Merge fixes
+Subject: [PATCH 20/35] Merge fixes
 
 ---
  .../features/compose/components/emoji_picker_dropdown.jsx       | 1 -
@@ -3124,10 +3100,10 @@ index a26d3e3888decf..4c7e74675abc8c 100644
  
          <Overlay show={active} placement={placement} flip target={this.findTarget} popperConfig={{ strategy: 'fixed', onFirstUpdate: this.handleOverlayEnter }}>
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index faf9c55e042144..aa531ee166ec08 100644
+index 3dad4a5bbcff71..dbeafbf1b4cb9b 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -9040,6 +9040,8 @@ noscript {
+@@ -8916,6 +8916,8 @@ noscript {
    }
  
    &--empty {
@@ -3137,10 +3113,10 @@ index faf9c55e042144..aa531ee166ec08 100644
        padding: 0;
      }
 
-From bef90d2d01f770989a9d12494fd51e2686fe8f35 Mon Sep 17 00:00:00 2001
+From 700a906a6a349872cb172e2c595b14dbf3c0052c Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 24 Feb 2024 17:20:38 -0600
-Subject: [PATCH 21/32] Fix reaction picker dropdown appearance
+Subject: [PATCH 21/35] Fix reaction picker dropdown appearance
 
 ---
  .../glitch/components/status_action_bar.jsx   | 18 +----------------
@@ -3151,10 +3127,10 @@ Subject: [PATCH 21/32] Fix reaction picker dropdown appearance
  5 files changed, 17 insertions(+), 45 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/components/status_action_bar.jsx b/app/javascript/flavours/glitch/components/status_action_bar.jsx
-index b92ff325bd3b09..82b100e89a8fe5 100644
+index d116b1d638e311..8636c529361def 100644
 --- a/app/javascript/flavours/glitch/components/status_action_bar.jsx
 +++ b/app/javascript/flavours/glitch/components/status_action_bar.jsx
-@@ -213,8 +213,6 @@ class StatusActionBar extends ImmutablePureComponent {
+@@ -215,8 +215,6 @@ class StatusActionBar extends ImmutablePureComponent {
      this.props.onAddFilter(this.props.status);
    };
  
@@ -3163,7 +3139,7 @@ index b92ff325bd3b09..82b100e89a8fe5 100644
    render () {
      const { status, intl, withDismiss, withCounters, showReplyCount, scrollKey } = this.props;
      const { permissions, signedIn } = this.props.identity;
-@@ -331,16 +329,6 @@ class StatusActionBar extends ImmutablePureComponent {
+@@ -333,16 +331,6 @@ class StatusActionBar extends ImmutablePureComponent {
      );
  
      const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
@@ -3177,11 +3153,11 @@ index b92ff325bd3b09..82b100e89a8fe5 100644
 -        iconComponent={AddReactionIcon}
 -      />
 -    );
+     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
+     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
  
-     return (
-       <div className='status__action-bar'>
-@@ -362,11 +350,7 @@ class StatusActionBar extends ImmutablePureComponent {
-           <IconButton className='status__action-bar-button star-icon' animate active={status.get('favourited')} title={intl.formatMessage(messages.favourite)} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
+@@ -366,11 +354,7 @@ class StatusActionBar extends ImmutablePureComponent {
+           <IconButton className='status__action-bar-button star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
          </div>
          <div className='status__action-bar__button-wrapper'>
 -          {
@@ -3192,9 +3168,9 @@ index b92ff325bd3b09..82b100e89a8fe5 100644
 +          <EmojiPickerDropdown className='status__action-bar-button' onPickEmoji={this.handleEmojiPick} title={intl.formatMessage(messages.react)} icon={AddReactionIcon} disabled={!canReact} />
          </div>
          <div className='status__action-bar__button-wrapper'>
-           <IconButton className='status__action-bar-button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={intl.formatMessage(messages.bookmark)} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} />
+           <IconButton className='status__action-bar-button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} />
 diff --git a/app/javascript/flavours/glitch/components/status_prepend.jsx b/app/javascript/flavours/glitch/components/status_prepend.jsx
-index fa54d42f6f52f3..fe880551d16405 100644
+index 39ff771efd4215..da430c6afd84c2 100644
 --- a/app/javascript/flavours/glitch/components/status_prepend.jsx
 +++ b/app/javascript/flavours/glitch/components/status_prepend.jsx
 @@ -6,10 +6,10 @@ import { FormattedMessage } from 'react-intl';
@@ -3209,7 +3185,7 @@ index fa54d42f6f52f3..fe880551d16405 100644
  import PushPinIcon from '@/material-icons/400-24px/push_pin.svg?react';
  import RepeatIcon from '@/material-icons/400-24px/repeat.svg?react';
  import StarIcon from '@/material-icons/400-24px/star-fill.svg?react';
-@@ -135,8 +135,8 @@ export default class StatusPrepend extends PureComponent {
+@@ -130,8 +130,8 @@ export default class StatusPrepend extends PureComponent {
        iconComponent = StarIcon;
        break;
      case 'reaction':
@@ -3256,10 +3232,10 @@ index 4c7e74675abc8c..ac835d51ef82c1 100644
          />
  
 diff --git a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-index ef8805b714c969..45d071b91c8ef9 100644
+index 3065e85b44ae4c..7a0369ebfa9eef 100644
 --- a/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
 +++ b/app/javascript/flavours/glitch/features/status/components/action_bar.jsx
-@@ -157,8 +157,6 @@ class ActionBar extends PureComponent {
+@@ -159,8 +159,6 @@ class ActionBar extends PureComponent {
      navigator.clipboard.writeText(url);
    };
  
@@ -3268,7 +3244,7 @@ index ef8805b714c969..45d071b91c8ef9 100644
    render () {
      const { status, intl } = this.props;
      const { signedIn, permissions } = this.props.identity;
-@@ -236,16 +234,6 @@ class ActionBar extends PureComponent {
+@@ -238,16 +236,6 @@ class ActionBar extends PureComponent {
      }
  
      const canReact = signedIn && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
@@ -3285,10 +3261,10 @@ index ef8805b714c969..45d071b91c8ef9 100644
  
      const reblogPrivate = status.getIn(['account', 'id']) === me && status.get('visibility') === 'private';
  
-@@ -270,13 +258,7 @@ class ActionBar extends PureComponent {
+@@ -275,13 +263,7 @@ class ActionBar extends PureComponent {
          <div className='detailed-status__button'><IconButton title={intl.formatMessage(messages.reply)} icon={replyIcon} iconComponent={replyIconComponent} onClick={this.handleReplyClick} /></div>
          <div className='detailed-status__button'><IconButton className={classNames({ reblogPrivate })} disabled={!publicStatus && !reblogPrivate} active={status.get('reblogged')} title={reblogTitle} icon='retweet' iconComponent={reblogIconComponent} onClick={this.handleReblogClick} /></div>
-         <div className='detailed-status__button'><IconButton className='star-icon' animate active={status.get('favourited')} title={intl.formatMessage(messages.favourite)} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} /></div>
+         <div className='detailed-status__button'><IconButton className='star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StarIcon : StarBorderIcon} onClick={this.handleFavouriteClick} /></div>
 -        <div className='detailed-status__button'>
 -          {
 -            signedIn
@@ -3297,14 +3273,14 @@ index ef8805b714c969..45d071b91c8ef9 100644
 -          }
 -        </div>
 +        <div className='detailed-status__button'><EmojiPickerDropdown onPickEmoji={this.handleEmojiPick} title={intl.formatMessage(messages.react)} icon={AddReactionIcon} disabled={!canReact} /></div>
-         <div className='detailed-status__button'><IconButton className='bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={intl.formatMessage(messages.bookmark)} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} /></div>
+         <div className='detailed-status__button'><IconButton className='bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? BookmarkIcon : BookmarkBorderIcon} onClick={this.handleBookmarkClick} /></div>
  
          <div className='detailed-status__action-bar-dropdown'>
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index aa531ee166ec08..54585c5ac7ae7f 100644
+index dbeafbf1b4cb9b..71483721035e82 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -1857,8 +1857,12 @@ body > [data-popper-placement] {
+@@ -1734,8 +1734,12 @@ body > [data-popper-placement] {
      flex-grow: 1;
    }
  
@@ -3320,10 +3296,10 @@ index aa531ee166ec08..54585c5ac7ae7f 100644
  }
  
 
-From 463f0b2fbd7db024fe76b2f37c045db3ee956e12 Mon Sep 17 00:00:00 2001
+From f67743ff3cacd8f1230c409fd45ab0265f415961 Mon Sep 17 00:00:00 2001
 From: Jeremy Kescher <jeremy@kescher.at>
 Date: Tue, 21 May 2024 00:46:17 +0200
-Subject: [PATCH 22/32] [Glitch+Emoji reactions] Use modern React context for
+Subject: [PATCH 22/35] [Glitch+Emoji reactions] Use modern React context for
  for identity for emoji reaction code
 
 ---
@@ -3332,18 +3308,18 @@ Subject: [PATCH 22/32] [Glitch+Emoji reactions] Use modern React context for
  2 files changed, 7 insertions(+), 4 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/components/status.jsx b/app/javascript/flavours/glitch/components/status.jsx
-index f7599a31c17b63..8f7f278891e855 100644
+index f91d512023f20b..5c16a8df6eb86b 100644
 --- a/app/javascript/flavours/glitch/components/status.jsx
 +++ b/app/javascript/flavours/glitch/components/status.jsx
-@@ -12,6 +12,7 @@ import { HotKeys } from 'react-hotkeys';
+@@ -11,6 +11,7 @@ import { HotKeys } from 'react-hotkeys';
+ 
+ import { ContentWarning } from 'flavours/glitch/components/content_warning';
  import PictureInPicturePlaceholder from 'flavours/glitch/components/picture_in_picture_placeholder';
- import PollContainer from 'flavours/glitch/containers/poll_container';
- import NotificationOverlayContainer from 'flavours/glitch/features/notifications/containers/overlay_container';
 +import { identityContextPropShape, withIdentity } from 'flavours/glitch/identity_context';
  import { autoUnfoldCW } from 'flavours/glitch/utils/content_warning';
  import { withOptionalRouter, WithOptionalRouterPropTypes } from 'flavours/glitch/utils/react_router';
  
-@@ -77,6 +78,7 @@ class Status extends ImmutablePureComponent {
+@@ -79,6 +80,7 @@ class Status extends ImmutablePureComponent {
    static contextType = SensitiveMediaContext;
  
    static propTypes = {
@@ -3351,15 +3327,15 @@ index f7599a31c17b63..8f7f278891e855 100644
      containerId: PropTypes.string,
      id: PropTypes.string,
      status: ImmutablePropTypes.map,
-@@ -544,6 +546,7 @@ class Status extends ImmutablePureComponent {
+@@ -456,6 +458,7 @@ class Status extends ImmutablePureComponent {
        onOpenMedia,
        notification,
        history,
 +      identity,
        ...other
      } = this.props;
-     const { isCollapsed } = this.state;
-@@ -854,7 +857,7 @@ class Status extends ImmutablePureComponent {
+     let attachments = null;
+@@ -740,7 +743,7 @@ class Status extends ImmutablePureComponent {
                numVisible={visibleReactions}
                addReaction={this.props.onReactionAdd}
                removeReaction={this.props.onReactionRemove}
@@ -3367,15 +3343,15 @@ index f7599a31c17b63..8f7f278891e855 100644
 +              canReact={this.props.identity.signedIn}
              />
  
-             {(!isCollapsed || !(muted || !settings.getIn(['collapsed', 'show_action_bar']))) && (
-@@ -879,4 +882,4 @@ class Status extends ImmutablePureComponent {
+             <StatusActionBar
+@@ -758,4 +761,4 @@ class Status extends ImmutablePureComponent {
  
  }
  
 -export default withOptionalRouter(injectIntl(Status));
 +export default withOptionalRouter(injectIntl((withIdentity(Status))));
 diff --git a/app/javascript/flavours/glitch/features/status/index.jsx b/app/javascript/flavours/glitch/features/status/index.jsx
-index e2da0c302ff59d..a44c0910f40080 100644
+index 91507497336cfa..7624facbde82a9 100644
 --- a/app/javascript/flavours/glitch/features/status/index.jsx
 +++ b/app/javascript/flavours/glitch/features/status/index.jsx
 @@ -282,8 +282,8 @@ class Status extends ImmutablePureComponent {
@@ -3390,10 +3366,10 @@ index e2da0c302ff59d..a44c0910f40080 100644
      if (signedIn) {
        dispatch(addReaction(statusId, name, url));
 
-From e0aec3b554a03a4dafe56c5a163aa9ad30af425f Mon Sep 17 00:00:00 2001
+From f5cf58dfe8acf3fbaac4456f5eca726db52f316b Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 16 Jun 2024 14:30:22 -0500
-Subject: [PATCH 23/32] Disable reactions in detailed status view when
+Subject: [PATCH 23/35] Disable reactions in detailed status view when
  visibleReactions is 0
 
 ---
@@ -3401,7 +3377,7 @@ Subject: [PATCH 23/32] Disable reactions in detailed status view when
  1 file changed, 10 insertions(+), 7 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
-index abf469295dd142..3028106c96da42 100644
+index 88b3c0962160bc..96077e5759b2f5 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 @@ -30,6 +30,7 @@ import { DisplayName } from '../../../components/display_name';
@@ -3412,9 +3388,9 @@ index abf469295dd142..3028106c96da42 100644
  import Audio from '../../audio';
  import scheduleIdleTask from '../../ui/util/schedule_idle_task';
  import Video from '../../video';
-@@ -417,13 +418,15 @@ export const DetailedStatus: React.FC<{
-           {...(statusContentProps as any)}
-         />
+@@ -390,13 +391,15 @@ export const DetailedStatus: React.FC<{
+         {/* This is a glitch-soc addition to have a placeholder */}
+         {!expanded && <MentionsPlaceholder status={status} />}
  
 -        <StatusReactions
 -          statusId={status.get('id')}
@@ -3436,10 +3412,10 @@ index abf469295dd142..3028106c96da42 100644
          <div className='detailed-status__meta'>
            <div className='detailed-status__meta__line'>
 
-From ea9ca79f118bc2150768a39ac008112d81f8c69c Mon Sep 17 00:00:00 2001
+From 7bce4b78b15ea7ff0f16a1c5429337d58397b778 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 18 Jun 2024 14:10:37 -0500
-Subject: [PATCH 24/32] Turn custom emoji regexps into class level constants
+Subject: [PATCH 24/35] Turn custom emoji regexps into class level constants
 
 ---
  app/lib/activitypub/activity/emoji_react.rb | 4 +++-
@@ -3514,10 +3490,10 @@ index 5f9f1bbecbfaf1..0c7714d6edf0e3 100644
        custom_emoji = process_emoji_tags(name, @object['tag'])
  
 
-From 61db720863469a6bd6ea2241ce88dae4a8cc5dfa Mon Sep 17 00:00:00 2001
+From aa47bea30c1493ff76a677faea392c857905110e Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 18 Jul 2024 21:01:46 -0500
-Subject: [PATCH 25/32] Add notification grouping for reactions
+Subject: [PATCH 25/35] Add notification grouping for reactions
 
 ---
  .../glitch/api_types/notifications.ts         |  2 ++
@@ -3693,10 +3669,10 @@ index a639578fe30ffc..6d27378c757901 100644
      case 'status':
      case 'mention':
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 54585c5ac7ae7f..52c0ad4512e5a2 100644
+index 71483721035e82..b1a2e13310d90c 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -10850,6 +10850,10 @@ noscript {
+@@ -10733,6 +10733,10 @@ noscript {
      color: $gold-star;
    }
  
@@ -3742,34 +3718,32 @@ index f4af842e38dca7..0ca9386a7ab3db 100644
  
    def report_type?
 
-From 4a29f8b19abd7afcccaa88c997aaba40f15791e2 Mon Sep 17 00:00:00 2001
+From 9dee02f017a7bc522fd2fae1292eea863d8a73d7 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jul 2024 23:10:43 -0500
-Subject: [PATCH 26/32] Fix reactions bar alignment in grouped notifications
+Subject: [PATCH 26/35] Fix reactions bar alignment in grouped notifications
 
 ---
- app/javascript/flavours/glitch/styles/components.scss | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ app/javascript/flavours/glitch/styles/components.scss | 1 +
+ 1 file changed, 1 insertion(+)
 
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 52c0ad4512e5a2..bf1923bf2be435 100644
+index b1a2e13310d90c..80ce8f9b9e2f4c 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -11070,7 +11070,8 @@ noscript {
-   $icon-margin: 48px; // 40px avatar + 8px gap
+@@ -10954,6 +10954,7 @@ noscript {
  
    .status__content,
--  .status__action-bar {
-+  .status__action-bar,
-+  .reactions-bar {
-     margin-inline-start: $icon-margin;
-     width: calc(100% - $icon-margin);
-   }
+   .status__action-bar,
++  .reactions-bar,
+   .media-gallery,
+   .video-player,
+   .audio-player,
 
-From 8e6a7b9298bedc3ffc5d265c47dd3077cbca5b0e Mon Sep 17 00:00:00 2001
+From 846ac4e1a16d603a9c29091a261506edd370c7a3 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 4 Aug 2024 19:13:04 -0500
-Subject: [PATCH 27/32] Fix reblog reactions being hydrated improperly
+Subject: [PATCH 27/35] Fix reblog reactions being hydrated improperly
 
 ---
  app/lib/status_cache_hydrator.rb | 9 ++++-----
@@ -3817,10 +3791,10 @@ index e3c9e49847edc2..baeec20d52968a 100644
        reactions,
        each_serializer: REST::ReactionSerializer,
 
-From 5680b43f2d47270919e6d12e5388b0b8071d2211 Mon Sep 17 00:00:00 2001
+From aca578f332ac586db77e4276910512aa2897c2e1 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 22 Aug 2024 12:22:36 -0500
-Subject: [PATCH 28/32] Fix grouped reaction notification text
+Subject: [PATCH 28/35] Fix grouped reaction notification text
 
 ---
  .../components/notification_reaction.tsx      | 28 ++++++++++++++-----
@@ -3867,22 +3841,22 @@ index 95dd4d850a8ed4..0ec53234f8fb8e 100644
  export const NotificationReaction: React.FC<{
    notification: NotificationGroupReaction;
 diff --git a/app/javascript/flavours/glitch/locales/en.json b/app/javascript/flavours/glitch/locales/en.json
-index 84766d65e3a5a9..9cba0bca8a0e89 100644
+index d35781603cca4d..727633908ccc54 100644
 --- a/app/javascript/flavours/glitch/locales/en.json
 +++ b/app/javascript/flavours/glitch/locales/en.json
-@@ -54,6 +54,7 @@
+@@ -52,6 +52,7 @@
+   "navigation_bar.keyboard_shortcuts": "Keyboard shortcuts",
    "navigation_bar.misc": "Misc",
-   "notification.markForDeletion": "Mark for deletion",
    "notification.reaction": "{name} reacted to your post",
 +  "notification.reaction.name_and_others": "{name} and {count, plural, one {# other} other {# others}} reacted to your post",
-   "notification_purge.btn_all": "Select\nall",
-   "notification_purge.btn_apply": "Clear\nselected",
-   "notification_purge.btn_invert": "Invert\nselection",
+   "notifications.column_settings.filter_bar.show_bar": "Show filter bar",
+   "notifications.column_settings.reaction": "Reactions:",
+   "notifications.filter.reactions": "Reactions",
 
-From 598c6fbb31e4dc08e66a02449c2a3028bdf59476 Mon Sep 17 00:00:00 2001
+From 6ab6e2cbb621cb56624d6ac36f3e5adf3d701316 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 13 Sep 2024 16:32:47 -0500
-Subject: [PATCH 29/32] Make addReaction and removeReaction optional props
+Subject: [PATCH 29/35] Make addReaction and removeReaction optional props
 
 This prevents things from breaking with embeds.
 ---
@@ -3929,10 +3903,10 @@ index 81443d20555e14..d750b5f23359d2 100644
      }
    };
 
-From 840f81c4cde09fb99bb508cf8b55387ef48cdbcd Mon Sep 17 00:00:00 2001
+From 0ed6788efd8e5f58fe6b5ba26164347745dff58d Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 3 Oct 2024 15:14:19 -0500
-Subject: [PATCH 30/32] Align mail status check with upstream
+Subject: [PATCH 30/35] Align mail status check with upstream
 
 ---
  app/mailers/notification_mailer.rb | 2 +-
@@ -3952,10 +3926,10 @@ index 1a3ffceccd056e..5e7509671636ba 100644
      locale_for_account(@me) do
        mail subject: default_i18n_subject(name: @account.acct)
 
-From 5b781ab1ea8739a8d8e8159bc60c0cecf23c5c08 Mon Sep 17 00:00:00 2001
+From 323f26ab4fe01b6f0591e6ff80f2bc5eb1d6efd9 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 7 Nov 2024 15:33:42 -0600
-Subject: [PATCH 31/32] Fix invisible reactions on detailed statuses when
+Subject: [PATCH 31/35] Fix invisible reactions on detailed statuses when
  logged out
 
 ---
@@ -3963,7 +3937,7 @@ Subject: [PATCH 31/32] Fix invisible reactions on detailed statuses when
  1 file changed, 1 insertion(+)
 
 diff --git a/app/serializers/initial_state_serializer.rb b/app/serializers/initial_state_serializer.rb
-index b5b2d043f48476..b7489c5e8ae428 100644
+index dfc1e5d399a28f..ed9ebe132a833e 100644
 --- a/app/serializers/initial_state_serializer.rb
 +++ b/app/serializers/initial_state_serializer.rb
 @@ -131,6 +131,7 @@ def default_meta_store
@@ -3971,14 +3945,14 @@ index b5b2d043f48476..b7489c5e8ae428 100644
        trends_enabled: Setting.trends,
        version: instance_presenter.version,
 +      visible_reactions: Setting.visible_reactions,
+       terms_of_service_enabled: TermsOfService.live.exists?,
      }
    end
- 
 
-From e58855d5825f581192e3c8b2c4a917c1c63496bf Mon Sep 17 00:00:00 2001
+From 88fdfaf1915fa99237ac5a4df6645288b104f416 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 26 Nov 2024 12:32:18 -0600
-Subject: [PATCH 32/32] Fix status reactions not animating on hover when logged
+Subject: [PATCH 32/35] Fix status reactions not animating on hover when logged
  out
 
 ---
@@ -4007,3 +3981,245 @@ index d750b5f23359d2..5d1fe8698f125f 100644
          style={this.props.style}
        >
          <span className='reactions-bar__item__emoji'>
+
+From 3373de5d120e5d8f25d5667e65d8dc99cd7aa23f Mon Sep 17 00:00:00 2001
+From: Essem <smswessem@gmail.com>
+Date: Wed, 18 Dec 2024 15:40:30 -0600
+Subject: [PATCH 33/35] Update status reaction emails
+
+---
+ .../images/mailer-new/heading/reaction.png    | Bin 1763 -> 5759 bytes
+ .../notification_mailer/reaction.html.haml    |   5 ++++-
+ .../notification_mailer/reaction.text.erb     |   2 +-
+ 3 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/app/javascript/images/mailer-new/heading/reaction.png b/app/javascript/images/mailer-new/heading/reaction.png
+index 2e2969953ea48ce39b3fca7e1282717d04229a84..8cfb73c69ec3e468da17af6ec50a3d6d537aa98a 100644
+GIT binary patch
+literal 5759
+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
+
+literal 1763
+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
+N5OZUkQH239<}WIbu$uq?
+
+diff --git a/app/views/notification_mailer/reaction.html.haml b/app/views/notification_mailer/reaction.html.haml
+index 32427d58e5177f..0bca350f1d8fa8 100644
+--- a/app/views/notification_mailer/reaction.html.haml
++++ b/app/views/notification_mailer/reaction.html.haml
+@@ -1,5 +1,8 @@
+ = content_for :heading do
+-  = render 'application/mailer/heading', heading_title: t('notification_mailer.reaction.title'), heading_subtitle: t('notification_mailer.reaction.body', name: @account.pretty_acct), heading_image_url: frontend_asset_url('images/mailer-new/heading/reaction.png')
++  = render 'application/mailer/heading',
++           image_url: frontend_asset_url('images/mailer-new/heading/reaction.png'),
++           subtitle: t('notification_mailer.reaction.body', name: @status.account.pretty_acct),
++           title: t('notification_mailer.reaction.title')
+ %table.email-w-full{ cellspacing: 0, cellpadding: 0, border: 0, role: 'presentation' }
+   %tr
+     %td.email-body-padding-td
+diff --git a/app/views/notification_mailer/reaction.text.erb b/app/views/notification_mailer/reaction.text.erb
+index fa30d708eaa33c..6efe7eba1d708c 100644
+--- a/app/views/notification_mailer/reaction.text.erb
++++ b/app/views/notification_mailer/reaction.text.erb
+@@ -1,5 +1,5 @@
+ <%= raw t('application_mailer.salutation', name: display_name(@me)) %>
+ 
+-<%= raw t('notification_mailer.reaction.body', name: @account.pretty_acct) %>
++<%= raw t('notification_mailer.reaction.body', name: @status.account.pretty_acct) %>
+ 
+ <%= render 'status', status: @status %>
+
+From 6ab8eb25968134694aa88948701a83f2aca62f80 Mon Sep 17 00:00:00 2001
+From: Essem <smswessem@gmail.com>
+Date: Sun, 29 Dec 2024 00:06:41 -0600
+Subject: [PATCH 34/35] Fix old migration
+
+---
+ db/migrate/20230215074425_move_emoji_reaction_settings.rb | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/db/migrate/20230215074425_move_emoji_reaction_settings.rb b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
+index 6d2d5e167ad9ca..789097117f7fb0 100644
+--- a/db/migrate/20230215074425_move_emoji_reaction_settings.rb
++++ b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
+@@ -7,21 +7,19 @@ class User < ApplicationRecord; end
+     setting_visible_reactions: 'visible_reactions',
+   }.freeze
+ 
+-  class LegacySetting < ApplicationRecord
+-    self.table_name = 'settings'
+-
++  class Setting < ApplicationRecord
+     def var
+       self[:var]&.to_sym
+     end
+ 
+     def value
+-      YAML.safe_load(self[:value], permitted_classes: [ActiveSupport::HashWithIndifferentAccess]) if self[:value].present?
++      YAML.safe_load(self[:value], permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol]) if self[:value].present?
+     end
+   end
+ 
+   def up
+     User.find_in_batches do |users|
+-      previous_settings_for_batch = LegacySetting.where(thing_type: 'User', thing_id: users.map(&:id)).group_by(&:thing_id)
++      previous_settings_for_batch = Setting.where(thing_type: 'User', thing_id: users.map(&:id)).group_by(&:thing_id)
+ 
+       users.each do |user|
+         previous_settings = previous_settings_for_batch[user.id]&.index_by(&:var) || {}
+
+From aa280071b763c8f04eda5ab115c5426748db9dcc Mon Sep 17 00:00:00 2001
+From: Essem <smswessem@gmail.com>
+Date: Fri, 3 Jan 2025 17:10:04 -0600
+Subject: [PATCH 35/35] Remove emoji reaction settings move migration
+
+It's now broken and pointless due to the complete removal of legacy user settings. Since this effectively predates the current reaction branch as well, there is little chance that someone running an older iteration will need to use this migration.
+---
+ ...0215074425_move_emoji_reaction_settings.rb | 47 -------------------
+ 1 file changed, 47 deletions(-)
+ delete mode 100644 db/migrate/20230215074425_move_emoji_reaction_settings.rb
+
+diff --git a/db/migrate/20230215074425_move_emoji_reaction_settings.rb b/db/migrate/20230215074425_move_emoji_reaction_settings.rb
+deleted file mode 100644
+index 789097117f7fb0..00000000000000
+--- a/db/migrate/20230215074425_move_emoji_reaction_settings.rb
++++ /dev/null
+@@ -1,47 +0,0 @@
+-# frozen_string_literal: true
+-
+-class MoveEmojiReactionSettings < ActiveRecord::Migration[6.1]
+-  class User < ApplicationRecord; end
+-
+-  MAPPING = {
+-    setting_visible_reactions: 'visible_reactions',
+-  }.freeze
+-
+-  class Setting < ApplicationRecord
+-    def var
+-      self[:var]&.to_sym
+-    end
+-
+-    def value
+-      YAML.safe_load(self[:value], permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol]) if self[:value].present?
+-    end
+-  end
+-
+-  def up
+-    User.find_in_batches do |users|
+-      previous_settings_for_batch = Setting.where(thing_type: 'User', thing_id: users.map(&:id)).group_by(&:thing_id)
+-
+-      users.each do |user|
+-        previous_settings = previous_settings_for_batch[user.id]&.index_by(&:var) || {}
+-        user_settings = Oj.load(user.settings || '{}')
+-        user_settings.delete('theme')
+-
+-        MAPPING.each do |legacy_key, new_key|
+-          value = previous_settings[legacy_key]&.value
+-
+-          next if value.blank?
+-
+-          if value.is_a?(Hash)
+-            value.each do |nested_key, nested_value|
+-              user_settings[MAPPING[legacy_key][nested_key.to_sym]] = nested_value
+-            end
+-          else
+-            user_settings[new_key] = value
+-          end
+-        end
+-
+-        user.update_column('settings', Oj.dump(user_settings))
+-      end
+-    end
+-  end
+-end
