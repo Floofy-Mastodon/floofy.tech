@@ -1,10 +1,10 @@
 diff --git a/Dockerfile b/Dockerfile
-index a5e3502..2ee04b8 100644
+index c61ec23..a4f9268 100644
 --- a/Dockerfile
 +++ b/Dockerfile
 @@ -3,13 +3,6 @@
  # This file is designed for production server deployment, not local development work
- # For a containerized local dev environment, see: https://github.com/mastodon/mastodon/blob/main/README.md#docker
+ # For a containerized local dev environment, see: https://github.com/mastodon/mastodon/blob/main/docs/DEVELOPMENT.md#docker
  
 -# Please see https://docs.docker.com/engine/reference/builder for information about
 -# the extended buildx capabilities used in this file.
@@ -17,7 +17,7 @@ index a5e3502..2ee04b8 100644
  # renovate: datasource=docker depName=docker.io/ruby
  ARG RUBY_VERSION="3.4.1"
 diff --git a/streaming/Dockerfile b/streaming/Dockerfile
-index bed6b63..6b3f872 100644
+index f56c1a4..ba43911 100644
 --- a/streaming/Dockerfile
 +++ b/streaming/Dockerfile
 @@ -1,12 +1,5 @@
