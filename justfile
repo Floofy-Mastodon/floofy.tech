@@ -7,15 +7,15 @@ clean:
 	rm -rf build
 
 update-mastodon: clean
-    git clone --depth 1 https://github.com/glitch-soc/mastodon.git build/mastodon
+    git clone https://github.com/glitch-soc/mastodon.git build/mastodon
     git -C build/mastodon log -n 1 --pretty=format:"%H" > .current
 
 build-mastodon:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	mkdir -p build
-	git clone --depth 1 https://github.com/glitch-soc/mastodon.git build/mastodon
-	git -C build/mastodon checkout $(.current)
+	git clone https://github.com/glitch-soc/mastodon.git build/mastodon
+	git -C build/mastodon checkout $(cat .current) .
 	for file in ./patches/*; do
 		if [[ "$file" == *.diff ]]; then
 		    echo "Applying ${file}"
