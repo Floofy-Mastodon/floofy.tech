@@ -1,12 +1,15 @@
 name: Check that patches apply
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+    paths:
+      - 'patches/**'
+      - '.current'
+      - 'justfile'
+      - 'patches.toml'
+      - '.github/workflows/check-patches.yaml'
 
 jobs:
   build:

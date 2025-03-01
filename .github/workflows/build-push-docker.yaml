@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'patches/**'
+      - '.current'
+      - 'justfile'
+      - 'patches.toml'
+      - '.github/workflows/build-push-docker.yaml'
 
 jobs:
   build:
