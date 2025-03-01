@@ -7,7 +7,7 @@ clean:
 	rm -rf build
 
 build-mastodon:
-	#!/usr/bin/env sh
+	#!/usr/bin/env bash
 	set -euo pipefail
 	mkdir -p build
 	git clone --depth 1 https://github.com/glitch-soc/mastodon.git build/mastodon
