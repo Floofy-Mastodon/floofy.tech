@@ -26,7 +26,6 @@ build-mastodon:
 		fi
 	done
 
-
 build-docker:
 	TARGETPLATFORM=linux/amd64 docker buildx build build/mastodon -t ghcr.io/floofy-mastodon/mastodon:custom --build-arg MASTODON_VERSION_METADATA=floofy-custom --load -f build/mastodon/Dockerfile
 	TARGETPLATFORM=linux/amd64 docker buildx build build/mastodon -t ghcr.io/floofy-mastodon/mastodon-streaming:custom --build-arg MASTODON_VERSION_METADATA=floofy-custom --load -f build/mastodon/streaming/Dockerfile
