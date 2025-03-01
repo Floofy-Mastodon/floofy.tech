@@ -1,0 +1,26 @@
+name: Check that patches apply
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'patches/**'
+      - '.current'
+      - 'justfile'
+      - 'patches.toml'
+      - '.github/workflows/check-patches.yaml'
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: taiki-e/install-action@just
+
+    - name: Run build
+      run: |
+        echo "Checking patches against glitch-soc $(cat .current)"
+        just build-mastodon

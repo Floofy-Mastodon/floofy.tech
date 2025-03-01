@@ -1,18 +1,22 @@
 default:
 	just --list
 
-build: clean build-mastodon build-docker commit-current-commit
+build: clean build-mastodon build-docker
 
 clean:
 	rm -rf build
 
+update-mastodon: clean
+    git clone https://github.com/glitch-soc/mastodon.git build/mastodon
+    git -C build/mastodon log -n 1 --pretty=format:"%H" > .current
+
 build-mastodon:
-	#!/usr/bin/env sh
+	#!/usr/bin/env bash
 	set -euo pipefail
 	mkdir -p build
-	git clone --depth 1 https://github.com/glitch-soc/mastodon.git build/mastodon
+	git clone https://github.com/glitch-soc/mastodon.git build/mastodon
+	git -C build/mastodon checkout $(cat .current) .
 	for file in ./patches/*; do
-
 		if [[ "$file" == *.diff ]]; then
 		    echo "Applying ${file}"
 			git -C build/mastodon -c commit.gpgsign=false apply "../.${file}"
@@ -22,7 +26,6 @@ build-mastodon:
 		fi
 	done
 
-
 build-docker:
 	TARGETPLATFORM=linux/amd64 docker buildx build build/mastodon -t ghcr.io/floofy-mastodon/mastodon:custom --build-arg MASTODON_VERSION_METADATA=floofy-custom --load -f build/mastodon/Dockerfile
 	TARGETPLATFORM=linux/amd64 docker buildx build build/mastodon -t ghcr.io/floofy-mastodon/mastodon-streaming:custom --build-arg MASTODON_VERSION_METADATA=floofy-custom --load -f build/mastodon/streaming/Dockerfile
@@ -30,9 +33,6 @@ build-docker:
 push-docker:
 	docker push ghcr.io/floofy-mastodon/mastodon:custom
 	docker push ghcr.io/floofy-mastodon/mastodon-streaming:custom
-
-commit-current-commit:
-	git -C build/mastodon log -n 1 --pretty=format:"%H" > .current
 
 update-patches:
     #!/usr/bin/env python3
