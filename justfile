@@ -17,11 +17,10 @@ build-mastodon:
 	git clone https://github.com/glitch-soc/mastodon.git build/mastodon
 	git -C build/mastodon checkout $(cat .current) .
 	for file in ./patches/*; do
+		echo "Applying ${file}"
 		if [[ "$file" == *.diff ]]; then
-		    echo "Applying ${file}"
 			git -C build/mastodon -c commit.gpgsign=false apply "../.${file}"
 		elif [[ "$file" == *.patch ]]; then
-		    echo "Applying ${file}"
 			git -C build/mastodon -c commit.gpgsign=false am "../.${file}"
 		fi
 	done

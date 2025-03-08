@@ -1,4 +1,4 @@
-From 85a6341ecaabd088b4a19bec8db303ca20077512 Mon Sep 17 00:00:00 2001
+From 23384282471195577cf2eb404f5503ffa313cc84 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 7 Nov 2023 18:43:47 -0600
 Subject: [PATCH 01/36] Add support for emoji reactions Squashed, modified, and
@@ -631,10 +631,10 @@ index d19cf6dd23f907..2ab6bcd02eb630 100644
      dispatch(openModal({
        modalType: 'EMBED',
 diff --git a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-index c556f1536689f3..a26d3e3888decf 100644
+index 256146a77ad2a8..95ea6c8af8a987 100644
 --- a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 +++ b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-@@ -327,6 +327,7 @@ class EmojiPickerDropdown extends PureComponent {
+@@ -336,6 +336,7 @@ class EmojiPickerDropdown extends PureComponent {
      onPickEmoji: PropTypes.func.isRequired,
      onSkinTone: PropTypes.func.isRequired,
      skinTone: PropTypes.number.isRequired,
@@ -642,7 +642,7 @@ index c556f1536689f3..a26d3e3888decf 100644
    };
  
    state = {
-@@ -361,7 +362,7 @@ class EmojiPickerDropdown extends PureComponent {
+@@ -370,7 +371,7 @@ class EmojiPickerDropdown extends PureComponent {
    };
  
    onToggle = (e) => {
@@ -788,7 +788,7 @@ index e598a3d0587b40..ec6f06c633905d 100644
  
          <div className='detailed-status__action-bar-dropdown'>
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
-index 4099ec5a82352e..88b3c0962160bc 100644
+index 19290cbe3336ee..69d197e2881e8b 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 @@ -22,12 +22,14 @@ import { MentionsPlaceholder } from 'flavours/glitch/components/mentions_placeho
@@ -1065,7 +1065,7 @@ index 39df0e956d2b68..ca7e98aa487dde 100644
      return state.setIn([action.id, 'muted'], true);
    case STATUS_UNMUTE_SUCCESS:
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 9778d87dd8e9de..cc58e072fceafa 100644
+index 1258368dd712e6..9d44a2ebda1026 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
 @@ -1540,6 +1540,7 @@ body > [data-popper-placement] {
@@ -1294,7 +1294,7 @@ index cafb2d151c1064..bd87169b2360d0 100644
  
          has_one :deletion_request, class_name: 'AccountDeletionRequest'
 diff --git a/app/models/concerns/account/interactions.rb b/app/models/concerns/account/interactions.rb
-index 6e2dc9126cf3df..c5894e08066ee6 100644
+index 33d51abed9f0a0..4d104711e8509d 100644
 --- a/app/models/concerns/account/interactions.rb
 +++ b/app/models/concerns/account/interactions.rb
 @@ -238,6 +238,10 @@ def favourited?(status)
@@ -1627,10 +1627,10 @@ index 7cedec5978586a..9cd2dd9d8f216d 100644
      object.current_account.user
    end
 diff --git a/app/serializers/rest/instance_serializer.rb b/app/serializers/rest/instance_serializer.rb
-index ec33fb39a2917c..544f5f1d109bdd 100644
+index 1436f2bb26601f..ff7cf22f7a8044 100644
 --- a/app/serializers/rest/instance_serializer.rb
 +++ b/app/serializers/rest/instance_serializer.rb
-@@ -97,6 +97,10 @@ def configuration
+@@ -100,6 +100,10 @@ def configuration
        translation: {
          enabled: TranslationService.configured?,
        },
@@ -1881,7 +1881,7 @@ index 9e943133bd9893..9de3f945ce9f60 100644
          trending_link: New trending link requires review
          trending_status: New trending post requires review
 diff --git a/config/routes/api.rb b/config/routes/api.rb
-index 9b448ae2259f11..6af573039ad6bf 100644
+index a937581b876ac7..cf1c145edb2486 100644
 --- a/config/routes/api.rb
 +++ b/config/routes/api.rb
 @@ -16,6 +16,11 @@
@@ -1986,10 +1986,10 @@ index 00000000000000..420772b6923f1a
 +  end
 +end
 diff --git a/db/schema.rb b/db/schema.rb
-index 05a5840765cb03..59618f1f1dfe09 100644
+index 3bc965d5cc102e..117e0394a5ffbb 100644
 --- a/db/schema.rb
 +++ b/db/schema.rb
-@@ -1007,6 +1007,18 @@
+@@ -1008,6 +1008,18 @@
      t.index ["status_id"], name: "index_status_pins_on_status_id"
    end
  
@@ -2008,7 +2008,7 @@ index 05a5840765cb03..59618f1f1dfe09 100644
    create_table "status_stats", force: :cascade do |t|
      t.bigint "status_id", null: false
      t.bigint "replies_count", default: 0, null: false
-@@ -1352,6 +1364,9 @@
+@@ -1355,6 +1367,9 @@
    add_foreign_key "status_edits", "statuses", on_delete: :cascade
    add_foreign_key "status_pins", "accounts", name: "fk_d4cb435b62", on_delete: :cascade
    add_foreign_key "status_pins", "statuses", on_delete: :cascade
@@ -2042,7 +2042,7 @@ index 00000000000000..ccfa9ee8d88825
 +
 +require 'rails_helper'
 
-From 8bb886259f6fe747c0340dddaa17db843c55c4f4 Mon Sep 17 00:00:00 2001
+From 3f942f111cbdf61b3679c05dbba10f7d7f06025f Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 10 Nov 2023 15:16:29 -0600
 Subject: [PATCH 02/36] Add notification emails for reactions
@@ -2213,7 +2213,7 @@ index 9de3f945ce9f60..a9361bf192a397 100644
          trending_status: New trending post requires review
          trending_tag: New trending tag requires review
 
-From ccb8d4fcbff1d7d581fc60fa19ea9ccff7d968c2 Mon Sep 17 00:00:00 2001
+From dc51a4c8605fa700f9c5822099f6c5b35a92bd97 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 10 Nov 2023 17:36:40 -0600
 Subject: [PATCH 03/36] Fix reblog reactions
@@ -2238,7 +2238,7 @@ index bc6eda2a1cc0f8..2fdb3da0ac62eb 100644
  
    private
 
-From 813c18cdb1c5ee540e738d22213a99eb4409b2e5 Mon Sep 17 00:00:00 2001
+From 0d6a5beddc80153f4cc67f6c353fe5987300b2c9 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 12 Nov 2023 20:59:36 -0600
 Subject: [PATCH 04/36] Refactor react services
@@ -2321,7 +2321,7 @@ index 7c1b32e94f1adc..49d232e931418f 100644
    end
  end
 
-From e771afe272c776a1a7475a8cf4daf0129ffe5b66 Mon Sep 17 00:00:00 2001
+From 1ee6d53067e80517036130b8e71c3705449e84a9 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Mon, 18 Dec 2023 18:27:02 -0600
 Subject: [PATCH 05/36] Linting fixes
@@ -2379,7 +2379,7 @@ index 9713da87f940e4..19857fe551aaca 100644
      %h4= t 'appearance.discovery'
  
 
-From 96db24f3187ae810f883ed4de442bb23af328a08 Mon Sep 17 00:00:00 2001
+From b603e6e21e3a26c5e7c6611222448ac8d484a7d6 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 19 Dec 2023 22:15:34 -0600
 Subject: [PATCH 06/36] Add reaction notification column settings This was in a
@@ -2421,7 +2421,7 @@ index 81a9d9e1d1f4ed..0377def8219ea4 100644
            <h3 id='notifications-mention'><FormattedMessage id='notifications.column_settings.mention' defaultMessage='Mentions:' /></h3>
  
 
-From e629b155b18653debc6bc4347a8603598d2c2c69 Mon Sep 17 00:00:00 2001
+From 23a70bc61d34714c43b6143024fc1929e0e2e162 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 22 Dec 2023 16:09:43 -0600
 Subject: [PATCH 07/36] Fix rubocop complaint
@@ -2444,7 +2444,7 @@ index 420772b6923f1a..6d2d5e167ad9ca 100644
      end
    end
 
-From f39a8435722feec243c7952c6035b23ebf80a944 Mon Sep 17 00:00:00 2001
+From bcd45f88410d0d397d1d9cc22495c390c395be1c Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 26 Dec 2023 14:04:53 -0600
 Subject: [PATCH 08/36] Check for content attribute in Misskey likes
@@ -2488,7 +2488,7 @@ index 5efcfdc99f2d49..5f9f1bbecbfaf1 100644
      else
        delete_later!(object_uri)
 
-From dd72a42c4aceebd5d263fc5bdb620c14624a914c Mon Sep 17 00:00:00 2001
+From 5181f42822b43e3eedcf098641c744763acdff0a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 13 Jan 2024 18:16:57 -0600
 Subject: [PATCH 09/36] Normalize emojis with variant selectors
@@ -2512,7 +2512,7 @@ index cfc3f99a78041f..be19bd850179ed 100644
      reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
      return reaction unless reaction.nil?
 
-From ef87d8034bc003891effaad7ce25cc02df2b7af7 Mon Sep 17 00:00:00 2001
+From b656c3d95be55d301e7b05a601d093223eb18dfa Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 13 Jan 2024 18:18:36 -0600
 Subject: [PATCH 10/36] Make name of like content parser function more general
@@ -2549,7 +2549,7 @@ index f6c8769fee4cae..006382082549a4 100644
      name = @json['content'] || @json['_misskey_reaction']
      return false if name.nil?
 
-From 2f763df20887e6a519347dd31ed687bf6848b6f1 Mon Sep 17 00:00:00 2001
+From fb5d152c79feddb4dd10cc62595928e70a975527 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 14 Jan 2024 15:47:55 -0600
 Subject: [PATCH 11/36] Quick fixes
@@ -2572,7 +2572,7 @@ index ec6f06c633905d..3065e85b44ae4c 100644
          title={intl.formatMessage(messages.react)}
          disabled={!canReact}
 
-From 153f65ee120ad407de8ea284e247fd967009d158 Mon Sep 17 00:00:00 2001
+From 1882a70baad372ccf40cfe8748391ad9b84429e8 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 14 Jan 2024 15:59:27 -0600
 Subject: [PATCH 12/36] Move reaction normalization to API controller
@@ -2630,7 +2630,7 @@ index be19bd850179ed..cfc3f99a78041f 100644
      reaction = StatusReaction.find_by(account: account, status: status, name: name, custom_emoji: custom_emoji)
      return reaction unless reaction.nil?
 
-From 02c3a9658a1791cd17a1442dfa0397e9c453f64e Mon Sep 17 00:00:00 2001
+From d8086268db41cf4ed4ac1b4e5858ef505e15de4b Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 17 Jan 2024 18:04:11 -0600
 Subject: [PATCH 13/36] Revert variant selector normalization
@@ -2674,7 +2674,7 @@ index 1d8382f8331332..2d7e4f59846220 100644
      @status = Status.find(params[:status_id])
      authorize @status, :show?
 
-From 220ac218c2efea0dfb31e5842fed2f7803bfbc38 Mon Sep 17 00:00:00 2001
+From 490deb9db93629d27cc6663d306aacfe0f07aea4 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 18 Jan 2024 21:38:39 -0600
 Subject: [PATCH 14/36] Update reaction emails
@@ -2792,7 +2792,7 @@ index 83ae41927d3f99..32427d58e5177f 100644
 +                %td.email-padding-top-24
 +                  = render 'application/mailer/button', text: t('application_mailer.view_status'), url: web_url("@#{@status.account.pretty_acct}/#{@status.id}")
 
-From a5b0bc1c08ec7e1571b009d605bc3b431a31e348 Mon Sep 17 00:00:00 2001
+From ace8fa021439b7ccc2e444be5dc264465e2ce296 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 23 Jan 2024 22:59:42 -0600
 Subject: [PATCH 15/36] Simplify reactions API controller
@@ -2833,7 +2833,7 @@ index 2d7e4f59846220..c4b0fa307f419a 100644
 -  end
  end
 
-From 39e4ec15c62f6b85f50dc1eb296de0c24e8a3b96 Mon Sep 17 00:00:00 2001
+From 70015e4bcd8a832671ab71a29cefc01293084eb4 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jan 2024 17:50:58 -0600
 Subject: [PATCH 16/36] Refactor status reactions query
@@ -2910,7 +2910,7 @@ index 5d802354d2695d..613279378309b0 100644
      return if marked_for_destruction? || destroyed?
  
 
-From d248bd4b73002ed69db380a8ac12aeee4329d0aa Mon Sep 17 00:00:00 2001
+From a3ef8382f9833a20aeef77d0c9cb40c5290d376a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 28 Jan 2024 14:51:10 -0600
 Subject: [PATCH 17/36] Fix rubocop lint issue
@@ -2920,7 +2920,7 @@ Subject: [PATCH 17/36] Fix rubocop lint issue
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/app/models/concerns/account/interactions.rb b/app/models/concerns/account/interactions.rb
-index c5894e08066ee6..4bc58859fe9a61 100644
+index 4d104711e8509d..cd6c63bab9543c 100644
 --- a/app/models/concerns/account/interactions.rb
 +++ b/app/models/concerns/account/interactions.rb
 @@ -239,7 +239,7 @@ def favourited?(status)
@@ -2933,7 +2933,7 @@ index c5894e08066ee6..4bc58859fe9a61 100644
  
    def bookmarked?(status)
 
-From e8098209ff4ae4258b6e777540a851b3583bf91b Mon Sep 17 00:00:00 2001
+From 3375a76bf810c6c3517fb34e00c12cb6d36ec5da Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 7 Feb 2024 17:14:16 -0600
 Subject: [PATCH 18/36] Purge status reactions on account delete
@@ -2971,7 +2971,7 @@ index 20d6ee8d64eb8b..118a7c8418e713 100644
      @account.bookmarks.in_batches do |bookmarks|
        Chewy.strategy.current.update(StatusesIndex, bookmarks.pluck(:status_id)) if Chewy.enabled?
 
-From 09ff933117e33b69aded5481b14b1b0851aea0fa Mon Sep 17 00:00:00 2001
+From 079d7d4797825ebf3688a88b611bbd9581be73a8 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 9 Feb 2024 17:42:19 -0600
 Subject: [PATCH 19/36] Hydrate reactions on streaming API
@@ -3077,7 +3077,7 @@ index 26aa19c1d02fe1..a23ea56dbcdd43 100644
  
    private
 
-From 31ba142e83c2033fdfb22b04e5434e2c4e0f0818 Mon Sep 17 00:00:00 2001
+From 8512013d5a5c41f3c9e6b66fd46fa8bce329611d Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 24 Feb 2024 16:22:40 -0600
 Subject: [PATCH 20/36] Merge fixes
@@ -3088,10 +3088,10 @@ Subject: [PATCH 20/36] Merge fixes
  2 files changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-index a26d3e3888decf..4c7e74675abc8c 100644
+index 95ea6c8af8a987..675cdf6849e14f 100644
 --- a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 +++ b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-@@ -402,7 +402,6 @@ class EmojiPickerDropdown extends PureComponent {
+@@ -411,7 +411,6 @@ class EmojiPickerDropdown extends PureComponent {
            active={active}
            iconComponent={MoodIcon}
            onClick={this.onToggle}
@@ -3100,10 +3100,10 @@ index a26d3e3888decf..4c7e74675abc8c 100644
  
          <Overlay show={active} placement={placement} flip target={this.findTarget} popperConfig={{ strategy: 'fixed', onFirstUpdate: this.handleOverlayEnter }}>
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index cc58e072fceafa..58800821c41733 100644
+index 9d44a2ebda1026..983363345c66f0 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -8850,6 +8850,8 @@ noscript {
+@@ -8851,6 +8851,8 @@ noscript {
    }
  
    &--empty {
@@ -3113,7 +3113,7 @@ index cc58e072fceafa..58800821c41733 100644
        padding: 0;
      }
 
-From a0fb0ca63e9c1ef81f1be80b80757274903f1b23 Mon Sep 17 00:00:00 2001
+From be798f8d301d9fef83e24d0a6c1d355cec150540 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 24 Feb 2024 17:20:38 -0600
 Subject: [PATCH 21/36] Fix reaction picker dropdown appearance
@@ -3197,10 +3197,10 @@ index 39ff771efd4215..da430c6afd84c2 100644
      case 'featured':
        iconId = 'thumb-tack';
 diff --git a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-index 4c7e74675abc8c..ac835d51ef82c1 100644
+index 675cdf6849e14f..9da2d4b16d2fc0 100644
 --- a/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
 +++ b/app/javascript/flavours/glitch/features/compose/components/emoji_picker_dropdown.jsx
-@@ -327,6 +327,8 @@ class EmojiPickerDropdown extends PureComponent {
+@@ -336,6 +336,8 @@ class EmojiPickerDropdown extends PureComponent {
      onPickEmoji: PropTypes.func.isRequired,
      onSkinTone: PropTypes.func.isRequired,
      skinTone: PropTypes.number.isRequired,
@@ -3209,10 +3209,10 @@ index 4c7e74675abc8c..ac835d51ef82c1 100644
      disabled: PropTypes.bool,
    };
  
-@@ -390,17 +392,17 @@ class EmojiPickerDropdown extends PureComponent {
+@@ -399,17 +401,17 @@ class EmojiPickerDropdown extends PureComponent {
    };
  
-   render () {
+   render() {
 -    const { intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis } = this.props;
 -    const title = intl.formatMessage(messages.emoji);
 +    const { intl, onPickEmoji, onSkinTone, skinTone, frequentlyUsedEmojis, title, icon, disabled } = this.props;
@@ -3277,7 +3277,7 @@ index 3065e85b44ae4c..7a0369ebfa9eef 100644
  
          <div className='detailed-status__action-bar-dropdown'>
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 58800821c41733..b48fe74b128016 100644
+index 983363345c66f0..4c685ef3002186 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
 @@ -1780,8 +1780,12 @@ body > [data-popper-placement] {
@@ -3296,7 +3296,7 @@ index 58800821c41733..b48fe74b128016 100644
  }
  
 
-From 3b3f36430cfdb160620834a49717bcc3368c552c Mon Sep 17 00:00:00 2001
+From 792d3f9e5f3c5ae17300a3d2afe8a9c934ee76aa Mon Sep 17 00:00:00 2001
 From: Jeremy Kescher <jeremy@kescher.at>
 Date: Tue, 21 May 2024 00:46:17 +0200
 Subject: [PATCH 22/36] [Glitch+Emoji reactions] Use modern React context for
@@ -3366,7 +3366,7 @@ index 91507497336cfa..7624facbde82a9 100644
      if (signedIn) {
        dispatch(addReaction(statusId, name, url));
 
-From 95150768c4d4b7409cc50687a75413678bb8c857 Mon Sep 17 00:00:00 2001
+From ddfbc0c49fb67839d719a02c9976a52fde850a3c Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 16 Jun 2024 14:30:22 -0500
 Subject: [PATCH 23/36] Disable reactions in detailed status view when
@@ -3377,7 +3377,7 @@ Subject: [PATCH 23/36] Disable reactions in detailed status view when
  1 file changed, 10 insertions(+), 7 deletions(-)
 
 diff --git a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
-index 88b3c0962160bc..96077e5759b2f5 100644
+index 69d197e2881e8b..3d4c9de8268186 100644
 --- a/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 +++ b/app/javascript/flavours/glitch/features/status/components/detailed_status.tsx
 @@ -30,6 +30,7 @@ import { DisplayName } from '../../../components/display_name';
@@ -3412,7 +3412,7 @@ index 88b3c0962160bc..96077e5759b2f5 100644
          <div className='detailed-status__meta'>
            <div className='detailed-status__meta__line'>
 
-From 27bcdb31b0ec504228c3671eddc4dacb83f838ae Mon Sep 17 00:00:00 2001
+From 7f2a948bff3e624d8aff370a8f9502ee74a3c9d4 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 18 Jun 2024 14:10:37 -0500
 Subject: [PATCH 24/36] Turn custom emoji regexps into class level constants
@@ -3490,7 +3490,7 @@ index 5f9f1bbecbfaf1..0c7714d6edf0e3 100644
        custom_emoji = process_emoji_tags(name, @object['tag'])
  
 
-From 43a3f02d0af3ebe0f547a7f0e06c21ca3dce1120 Mon Sep 17 00:00:00 2001
+From 7da5336bbe66e5fd899744bdfd610c441e21b10a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 18 Jul 2024 21:01:46 -0500
 Subject: [PATCH 25/36] Add notification grouping for reactions
@@ -3669,10 +3669,10 @@ index a639578fe30ffc..6d27378c757901 100644
      case 'status':
      case 'mention':
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index b48fe74b128016..4c4a646c11bc58 100644
+index 4c685ef3002186..7dbae78f5fc47e 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -10667,6 +10667,10 @@ noscript {
+@@ -10668,6 +10668,10 @@ noscript {
      color: $gold-star;
    }
  
@@ -3719,7 +3719,7 @@ index f4af842e38dca7..0ca9386a7ab3db 100644
  
    def report_type?
 
-From 53b0354adb95985438f1b61a168aa1c57749f811 Mon Sep 17 00:00:00 2001
+From 06e33cbca7e59c10a417e6e11586f528049e2a31 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 24 Jul 2024 23:10:43 -0500
 Subject: [PATCH 26/36] Fix reactions bar alignment in grouped notifications
@@ -3729,10 +3729,10 @@ Subject: [PATCH 26/36] Fix reactions bar alignment in grouped notifications
  1 file changed, 1 insertion(+)
 
 diff --git a/app/javascript/flavours/glitch/styles/components.scss b/app/javascript/flavours/glitch/styles/components.scss
-index 4c4a646c11bc58..2d133508aebd91 100644
+index 7dbae78f5fc47e..6ea4b9291c6f20 100644
 --- a/app/javascript/flavours/glitch/styles/components.scss
 +++ b/app/javascript/flavours/glitch/styles/components.scss
-@@ -10883,6 +10883,7 @@ noscript {
+@@ -10884,6 +10884,7 @@ noscript {
  
    .status__content,
    .status__action-bar,
@@ -3741,7 +3741,7 @@ index 4c4a646c11bc58..2d133508aebd91 100644
    .video-player,
    .audio-player,
 
-From 44aa13c1fe1efafbcf945944aca4c543c5554818 Mon Sep 17 00:00:00 2001
+From 259c81f61a5327b4b56977a8331dd965941e6dcb Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 4 Aug 2024 19:13:04 -0500
 Subject: [PATCH 27/36] Fix reblog reactions being hydrated improperly
@@ -3792,7 +3792,7 @@ index e3c9e49847edc2..baeec20d52968a 100644
        reactions,
        each_serializer: REST::ReactionSerializer,
 
-From c6becb4d4f1cc5a743e97baa1a013e771a21beb7 Mon Sep 17 00:00:00 2001
+From 025719ca0eda58d65d41df561f7e5e740bb81121 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 22 Aug 2024 12:22:36 -0500
 Subject: [PATCH 28/36] Fix grouped reaction notification text
@@ -3854,7 +3854,7 @@ index 0d4528c173da15..a12612147bcd9b 100644
    "notifications.column_settings.reaction": "Reactions:",
    "notifications.filter.reactions": "Reactions",
 
-From e76a2a2ab91e7b9aaf1ab205e744dd54b3bf4fec Mon Sep 17 00:00:00 2001
+From a1d30f1089f53dfd5ac792b4f6972b9c39966d88 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 13 Sep 2024 16:32:47 -0500
 Subject: [PATCH 29/36] Make addReaction and removeReaction optional props
@@ -3904,7 +3904,7 @@ index 81443d20555e14..d750b5f23359d2 100644
      }
    };
 
-From 9eef340f57bd6e9277299def5ee03a47b44d6a5b Mon Sep 17 00:00:00 2001
+From 9333259c326e0ab8661c75d4bbd32915270f46fd Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 3 Oct 2024 15:14:19 -0500
 Subject: [PATCH 30/36] Align mail status check with upstream
@@ -3927,7 +3927,7 @@ index 1a3ffceccd056e..5e7509671636ba 100644
      locale_for_account(@me) do
        mail subject: default_i18n_subject(name: @account.acct)
 
-From a4634233357477bdd7c007c7da0d60b7798e5083 Mon Sep 17 00:00:00 2001
+From 4ffe2e42144e1c606b4c7d0415751d9445b23ab6 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Thu, 7 Nov 2024 15:33:42 -0600
 Subject: [PATCH 31/36] Fix invisible reactions on detailed statuses when
@@ -3950,7 +3950,7 @@ index 9cd2dd9d8f216d..8e53ef1dcdd40d 100644
      }
    end
 
-From af2cb331e81e9e8899aef74f636c1085063796f8 Mon Sep 17 00:00:00 2001
+From d2f8e8183e4707019690a4b9f88c89728e3bf424 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Tue, 26 Nov 2024 12:32:18 -0600
 Subject: [PATCH 32/36] Fix status reactions not animating on hover when logged
@@ -3983,7 +3983,7 @@ index d750b5f23359d2..5d1fe8698f125f 100644
        >
          <span className='reactions-bar__item__emoji'>
 
-From e8af21a9b6022e6537bff916372925f5d0261c1e Mon Sep 17 00:00:00 2001
+From 3a225a0bae8b3f868ffc4b74932de7fddd1dc7c1 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Wed, 18 Dec 2024 15:40:30 -0600
 Subject: [PATCH 33/36] Update status reaction emails
@@ -4121,7 +4121,7 @@ index fa30d708eaa33c..6efe7eba1d708c 100644
  
  <%= render 'status', status: @status %>
 
-From f1bcb52d99cce3256c39af0334736f11e7f2b2b9 Mon Sep 17 00:00:00 2001
+From 09b876d7f4a39726a90558ec224127ca36568e54 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sun, 29 Dec 2024 00:06:41 -0600
 Subject: [PATCH 34/36] Fix old migration
@@ -4160,7 +4160,7 @@ index 6d2d5e167ad9ca..789097117f7fb0 100644
        users.each do |user|
          previous_settings = previous_settings_for_batch[user.id]&.index_by(&:var) || {}
 
-From c2cd972b9fe08729dfeec65e185d36422fd039b5 Mon Sep 17 00:00:00 2001
+From 02a90034df30a812df2cd97db9b2f3c34551b4b8 Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Fri, 3 Jan 2025 17:10:04 -0600
 Subject: [PATCH 35/36] Remove emoji reaction settings move migration
@@ -4225,7 +4225,7 @@ index 789097117f7fb0..00000000000000
 -  end
 -end
 
-From 7cfad1f7b3f67f10f1466e2b7327b77aff19893f Mon Sep 17 00:00:00 2001
+From 1592fa2684d00c98da6aeb91c01030d77aa32a3a Mon Sep 17 00:00:00 2001
 From: Essem <smswessem@gmail.com>
 Date: Sat, 8 Feb 2025 14:22:11 -0600
 Subject: [PATCH 36/36] Group reaction notifications by default

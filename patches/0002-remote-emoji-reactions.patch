@@ -1,0 +1,85 @@
+From e9d7565490cca1e205939ce699e294a5405c9851 Mon Sep 17 00:00:00 2001
+From: Mina Her <minacle@live.com>
+Date: Sat, 8 Mar 2025 14:05:54 +0900
+Subject: [PATCH] Receive reaction from other instance for another instances
+
+---
+ app/lib/activitypub/activity/emoji_react.rb | 1 -
+ app/lib/activitypub/activity/like.rb        | 6 +++---
+ app/lib/activitypub/activity/undo.rb        | 8 +++++---
+ 3 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/app/lib/activitypub/activity/emoji_react.rb b/app/lib/activitypub/activity/emoji_react.rb
+index ad9f9abbaa..03fc008427 100644
+--- a/app/lib/activitypub/activity/emoji_react.rb
++++ b/app/lib/activitypub/activity/emoji_react.rb
+@@ -7,7 +7,6 @@ class ActivityPub::Activity::EmojiReact < ActivityPub::Activity
+     original_status = status_from_uri(object_uri)
+     name = @json['content']
+     return if original_status.nil? ||
+-              !original_status.account.local? ||
+               delete_arrived_first?(@json['id'])
+ 
+     if CUSTOM_EMOJI_REGEX.match?(name)
+diff --git a/app/lib/activitypub/activity/like.rb b/app/lib/activitypub/activity/like.rb
+index 8856f7be4c..0b7a217736 100644
+--- a/app/lib/activitypub/activity/like.rb
++++ b/app/lib/activitypub/activity/like.rb
+@@ -5,11 +5,11 @@ class ActivityPub::Activity::Like < ActivityPub::Activity
+ 
+   def perform
+     original_status = status_from_uri(object_uri)
+-    return if original_status.nil? || !original_status.account.local? || delete_arrived_first?(@json['id'])
++    return if original_status.nil? || delete_arrived_first?(@json['id'])
+ 
+     return if maybe_process_embedded_reaction
+ 
+-    return if @account.favourited?(original_status)
++    return if !original_status.account.local? || @account.favourited?(original_status)
+ 
+     favourite = original_status.favourites.create!(account: @account)
+ 
+@@ -34,7 +34,7 @@ class ActivityPub::Activity::Like < ActivityPub::Activity
+     return true if @account.reacted?(original_status, name, custom_emoji)
+ 
+     reaction = original_status.status_reactions.create!(account: @account, name: name, custom_emoji: custom_emoji)
+-    LocalNotificationWorker.perform_async(original_status.account_id, reaction.id, 'StatusReaction', 'reaction')
++    LocalNotificationWorker.perform_async(original_status.account_id, reaction.id, 'StatusReaction', 'reaction') if original_status.account.local?
+     true
+   # account tried to react with disabled custom emoji. Returning true to discard activity.
+   rescue ActiveRecord::RecordInvalid
+diff --git a/app/lib/activitypub/activity/undo.rb b/app/lib/activitypub/activity/undo.rb
+index 0c7714d6ed..3f2df8d78c 100644
+--- a/app/lib/activitypub/activity/undo.rb
++++ b/app/lib/activitypub/activity/undo.rb
+@@ -107,14 +107,16 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+   def undo_like
+     status = status_from_uri(target_uri)
+ 
+-    return if status.nil? || !status.account.local?
++    return if status.nil?
+ 
+-    if @account.favourited?(status)
++    if @account.favourited?(status) && status.account.local?
+       favourite = status.favourites.where(account: @account).first
+       favourite&.destroy
+     elsif @object['content'].present? || @object['_misskey_reaction'].present?
+       undo_emoji_react
+     else
++      return unless status.account.local?
++
+       delete_later!(object_uri)
+     end
+   end
+@@ -125,7 +127,7 @@ class ActivityPub::Activity::Undo < ActivityPub::Activity
+ 
+     status = status_from_uri(target_uri)
+ 
+-    return if status.nil? || !status.account.local?
++    return if status.nil?
+ 
+     if CUSTOM_EMOJI_REGEX.match?(name)
+       name.delete! ':'
+-- 
+2.45.2
+
