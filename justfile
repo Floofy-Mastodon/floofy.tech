@@ -1,20 +1,22 @@
 default:
 	just --list
 
-build: clean build-mastodon build-docker
+build: clone build-mastodon build-docker
 
 clean:
 	rm -rf build
 
-update-mastodon: clean
+clone: clean
     git clone https://github.com/glitch-soc/mastodon.git build/mastodon
+
+update-mastodon: clone
     git -C build/mastodon log -n 1 --pretty=format:"%H" > .current
 
-build-mastodon:
+build-mastodon: clone
 	#!/usr/bin/env bash
 	set -euo pipefail
 	mkdir -p build
-	git clone https://github.com/glitch-soc/mastodon.git build/mastodon
+
 	git -C build/mastodon checkout $(cat .current) .
 	for file in ./patches/*; do
 		echo "Applying ${file}"
